@@ -3,7 +3,7 @@ import math
 import csv 
 import matplotlib.pyplot as plt  
 
-#Random valores de las variables
+# Delimitación de valores aleatorios para las variables
 min_radius = 0.6
 max_radius = 1.37
 
@@ -16,14 +16,15 @@ max_relacion = 11.0
 num_results = 100
 random_relacion = random.uniform(min_relacion, max_relacion)
 
-#Donde guardamos los datos
+# Donde se guardan los datos
 output_file_path = 'values.csv'
 
-
-
+# Títulos de filas de encabezado para el .csv 
 head = ["Velocidad Angular", "Radio de la rueda (m)", "Relacion de Transmision", "RPM"]
 data = [head]
 
+
+# Generar aleatoriamente y almacenar valores de RPM
 rpm_values = []
 
 for i in range(num_results):
@@ -38,19 +39,20 @@ for i in range(num_results):
     data.append(data_val)
 
     rpm_values.append(r_RPM)
-#Guardamos todos los datos en el csv
+
 with open(output_file_path, mode = 'w', newline = '') as csv_file:
+    # Guardar datos obtenidos en el .csv
     writer = csv.writer(csv_file)
     writer.writerows(data)
 
-    plt.figure(figsize=(8, 5)) 
+    # Generar gráficas a partir de los datos obtenidos
+    plt.figure(figsize=(8, 5))
     plt.plot(range(1, num_results + 1), rpm_values, marker='o', linestyle='-', color='b', label='RPM')
 
-  
     plt.title('Valores de RPM Generados Aleatoriamente')
     plt.xlabel('Numero de Iteración / Prueba')
     plt.ylabel('Revoluciones Por Minuto (RPM)')
-    plt.grid(True) 
-    plt.legend()   
+    plt.grid(True)
+    plt.legend()
 
     plt.show()
