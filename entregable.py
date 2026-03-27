@@ -29,19 +29,34 @@ data = [head]
 # Generar aleatoriamente y almacenar valores de RPM
 rpm_values = []
 iteraciones = []
+velocidad_angular = []
+radio_rueda = []
 
 # Gráfico interactivo
 plt.ion()
-fig, ax = plt.subplots(figsize=(8, 5))
-line, = ax.plot([], [], marker='o', linestyle='-', color='b', label='RPM')
+fig, (rpmgraph, radgrad, velgrad) = plt.subplots(3, 1, figsize=(15, 20))
+fig.tight_layout(pad=4.0)
 
-ax.set_xlim(0, num_results)
-ax.set_ylim(0, 30)
-ax.set_title('Valores de RPM Generados Aleatoriamente')
-ax.set_xlabel('Número de Iteración')
-ax.set_ylabel('Revoluciones por Minuto (RPM)')
-ax.grid(True)
-ax.legend()
+line_rpm, = rpmgraph.plot([], [], marker='o', color='b', label='RPM')
+rpmgraph.set_xlim(0, num_results)
+rpmgraph.set_ylim(0,30)
+rpmgraph.set_title('Valores de RPM')
+rpmgraph.set_ylabel('RPM')
+rpmgraph.grid(True)
+
+line_radio, = radgrad.plot([], [], marker='o', color='g', label='radio')
+radgrad.set_xlim(0, num_results)
+radgrad.set_ylim(min_radius - 0.5, max_radius + 0.5)
+radgrad.set_title('Valores del radio')
+radgrad.set_ylabel('m')
+radgrad.grid(True)
+
+line_vel, = velgrad.plot([], [], marker='o', color='r', label='vel')
+velgrad.set_xlim(0, num_results)
+velgrad.set_ylim(min_speed - 3, max_speed + 3)
+velgrad.set_title('Valores de velocidad')
+velgrad.set_ylabel('rad/s')
+velgrad.grid(True)
 
 for i in range(num_results):
     random_radius = random.uniform(min_radius, max_radius)
@@ -55,14 +70,17 @@ for i in range(num_results):
     data.append(data_val)
 
     rpm_values.append(r_RPM)
+    velocidad_angular.append(random_speed)
+    radio_rueda.append(random_radius)
     iteraciones.append(i)
 
     # Generar gráficas a partir de los datos obtenidos
-    line.set_data(iteraciones, rpm_values)
-    
+    line_radio.set_data(iteraciones, radio_rueda)
+    line_rpm.set_data(iteraciones, rpm_values)
+    line_vel.set_data(iteraciones, velocidad_angular)
     # Ajuste automático de los ejes si los valores se salen del rango
-    if r_RPM > ax.get_ylim()[1]:
-        ax.set_ylim(0, r_RPM + 10)
+    if r_RPM > rpmgraph.get_ylim()[1]:
+        rpmgraph.set_ylim(0, r_RPM + 10)
     
     plt.draw()
 
