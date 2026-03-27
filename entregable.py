@@ -1,95 +1,116 @@
 import random
 import math
 import csv 
-import time
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt  
 
 # Delimitación de valores aleatorios para las variables
-min_radius = 0.6
-max_radius = 1.37
+min_radio = 0.6
+max_radio = 1.37
 
-min_speed = 7.0
-max_speed = 16.0
+min_vel_ang = 7.0
+max_vel_ang = 16.0
 
-min_relacion = 8.5
-max_relacion = 11.0
+min_rel_transmision = 8.5
+max_rel_transmision = 11.0
 
-num_results = 100
-random_relacion = random.uniform(min_relacion, max_relacion)
+num_resultados = 25
+random_rel_transmision = random.uniform(min_rel_transmision, max_rel_transmision)
 
 # Donde se guardan los datos
-output_file_path = 'values.csv'
+ruta_archivo_datos = 'valores.csv'
 
 # Títulos de filas de encabezado para el .csv 
-head = ["Velocidad Angular", "Radio de la rueda (m)", "Relacion de Transmision", "RPM"]
+head = ["Velocidad Angular (rad/s)", "Radio de la rueda (m)", "rel_transmision de Transmisión", "RPM"]
 data = [head]
 
-# Generar aleatoriamente y almacenar valores de RPM
-rpm_values = []
-iteraciones = []
+# Listas para almacenar valores obtenidos e iteraciones
+rpm_valores = []
 velocidad_angular = []
 radio_rueda = []
+iteraciones = []
 
-# Gráfico interactivo
+# Setup del gráfico interactivo
 plt.ion()
-fig, (rpmgraph, radgrad, velgrad) = plt.subplots(3, 1, figsize=(15, 20))
-fig.tight_layout(pad=4.0)
+fig, (rpm_grafica, radio_grafica, vel_ang_grafica) = plt.subplots(3, 1, figsize=(15, 20))
+fig.tight_layout(pad=5.0)
+fig.subplots_adjust(hspace=0.5)
 
-line_rpm, = rpmgraph.plot([], [], marker='o', color='b', label='RPM')
-rpmgraph.set_xlim(0, num_results)
-rpmgraph.set_ylim(0,30)
-rpmgraph.set_title('Valores de RPM')
-rpmgraph.set_ylabel('RPM')
-rpmgraph.grid(True)
+# Subplot 1: Gráfico de revoluciones por minuto en el tiempo
+line_rpm, = rpm_grafica.plot([], [], marker='o', color='b', label='RPM')
+rpm_grafica.set_xlim(0, num_resultados - 1)
+rpm_grafica.set_ylim(0, 30)
+rpm_grafica.set_title('RPM en el Tiempo')
+rpm_grafica.set_xlabel('Tiempo (s)')
+rpm_grafica.set_ylabel('Revoluciones por Minuto (RPM)')
+rpm_grafica.grid(True)
 
-line_radio, = radgrad.plot([], [], marker='o', color='g', label='radio')
-radgrad.set_xlim(0, num_results)
-radgrad.set_ylim(min_radius - 0.5, max_radius + 0.5)
-radgrad.set_title('Valores del radio')
-radgrad.set_ylabel('m')
-radgrad.grid(True)
+# Subplot 2: Gráfico de radio de la rueda en el tiempo
+line_radio, = radio_grafica.plot([], [], marker='o', color='g', label='Radio')
+radio_grafica.set_xlim(0, num_resultados - 1)
+radio_grafica.set_ylim(min_radio - 0.5, max_radio + 0.5)
+radio_grafica.set_title('Radio de la Rueda en el Tiempo')
+radio_grafica.set_xlabel('Tiempo (s)')
+radio_grafica.set_ylabel('Radio (m)')
+radio_grafica.grid(True)
 
-line_vel, = velgrad.plot([], [], marker='o', color='r', label='vel')
-velgrad.set_xlim(0, num_results)
-velgrad.set_ylim(min_speed - 3, max_speed + 3)
-velgrad.set_title('Valores de velocidad')
-velgrad.set_ylabel('rad/s')
-velgrad.grid(True)
+# Subplot 3: Gráfico de velocidad angular en el tiempo
+line_vel, = vel_ang_grafica.plot([], [], marker='o', color='r', label='Velocidad Angular')
+vel_ang_grafica.set_xlim(0, num_resultados - 1)
+vel_ang_grafica.set_ylim(min_vel_ang - 3, max_vel_ang + 3)
+vel_ang_grafica.set_title('Velocidad Angular en el Tiempo')
+vel_ang_grafica.set_xlabel('Tiempo (s)')
+vel_ang_grafica.set_ylabel('Velocidad Angular (rad/s)')
+vel_ang_grafica.grid(True)
 
-for i in range(num_results):
-    random_radius = random.uniform(min_radius, max_radius)
-    random_speed = random.uniform(min_speed,  max_speed)
-    r_RPM= (random_speed * 60) / (2 * math.pi * random_radius * random_relacion)
-    print(f"radio: {random_radius: .2f} m")
-    print(f"Velocidad: {random_speed: .2f} rad/s")
-    print(f"Relacion: {random_relacion: .2f}")
-    print(f"RPM: {r_RPM: .2f} RPM")
-    data_val = [round(random_speed, 2), round(random_radius, 2), round(random_relacion, 2), round(r_RPM, 2)]
+# Generación de datos
+for i in range(num_resultados):
+    # Obtención de valores aleatorios
+    random_radio = random.uniform(min_radio, max_radio)
+    random_vel_ang = random.uniform(min_vel_ang,  max_vel_ang)
+
+    # Cálculo de RPM, basado en:
+    # RPM = (Velocidad angular de la rueda * 60) / (2 * π       * Radio de la rueda * Relación de transmisión)
+    r_RPM = (random_vel_ang                * 60) / (2 * math.pi * random_radio      * random_rel_transmision        )
+
+    # Agregar datos a los arreglos correspondientes, redondeándolos a dos decimales
+    data_val = [round(random_vel_ang, 2), round(random_radio, 2), round(random_rel_transmision, 2), round(r_RPM, 2)]
     data.append(data_val)
 
-    rpm_values.append(r_RPM)
-    velocidad_angular.append(random_speed)
-    radio_rueda.append(random_radius)
+    rpm_valores.append(r_RPM)
+    radio_rueda.append(random_radio)
+    velocidad_angular.append(random_vel_ang)
     iteraciones.append(i)
 
-    # Generar gráficas a partir de los datos obtenidos
-    line_radio.set_data(iteraciones, radio_rueda)
-    line_rpm.set_data(iteraciones, rpm_values)
-    line_vel.set_data(iteraciones, velocidad_angular)
     # Ajuste automático de los ejes si los valores se salen del rango
-    if r_RPM > rpmgraph.get_ylim()[1]:
-        rpmgraph.set_ylim(0, r_RPM + 10)
-    
+    if r_RPM > rpm_grafica.get_ylim()[1]:
+        rpm_grafica.set_ylim(0, r_RPM + 10)
+    if random_radio > radio_grafica.get_ylim()[1]:
+        radio_grafica.set_ylim(0, random_radio + 10)
+    if random_vel_ang > vel_ang_grafica.get_ylim()[1]:
+        vel_ang_grafica.set_ylim(0, random_vel_ang + 10)
+
+    # Actualizar gráficas a partir de los datos obtenidos
+    line_rpm.set_data(iteraciones, rpm_valores)
+    line_radio.set_data(iteraciones, radio_rueda)
+    line_vel.set_data(iteraciones, velocidad_angular)
+
     plt.draw()
 
-    plt.pause(0.5)
+    plt.pause(1) # Para simular un valor por segundo
 
-with open(output_file_path, mode = 'w', newline = '') as csv_file:
-    # Guardar datos obtenidos en el .csv
+    # Impresión de parámetros (debug)
+    print(f"radio: {random_radio: .2f} m")
+    print(f"Velocidad: {random_vel_ang: .2f} rad/s")
+    print(f"rel_transmision: {random_rel_transmision: .2f}")
+    print(f"RPM: {r_RPM: .2f} RPM")
+
+# Guardar datos obtenidos en el .csv
+with open(ruta_archivo_datos, mode = 'w', newline = '') as csv_file:
     writer = csv.writer(csv_file)
     writer.writerows(data)
 
+# Terminar interactividad de la gráfica
 plt.ioff()
 plt.show()
