@@ -107,7 +107,7 @@ typedef struct {
 	volatile uint32_t JDR3;
 	volatile uint32_t JDR4;
 	volatile uint32_t DR;
-} ADC_Typedef;
+} ADC_TypeDef;
 
 #define TIM2_BASE 	0x40000000UL//		TIM2 base address
 #define FLASH_BASE	0x40022000UL//		FLASH base address

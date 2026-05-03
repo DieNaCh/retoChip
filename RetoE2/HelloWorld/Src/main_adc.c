@@ -1,5 +1,5 @@
-#include <cstdint>
 #include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include "main.h"
 #include "user_timer.h"
@@ -19,7 +19,7 @@ int main(void){
     for(;;){
         if ((ADC->SR & ( 0x1UL << 1U ))) {
             // 1. Read the raw 12-bit ADC value
-            uint32_t result = ADC1->DR;
+            uint32_t result = ADC->DR;
 
             // 2. Create a character buffer
             char msgBuffer[32];
