@@ -64,6 +64,7 @@ void USER_ADC_Init( void ) {
 
     // Step 6: Enable the ADC module
     ADC->CR2 |= ( 0x1UL << 0U );
+    USER_Delay_10ms();
 
     // Step 7: Calibration
     ADC->CR2 |= ( 0x1UL << 2U );
