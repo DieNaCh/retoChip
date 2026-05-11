@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <stddef.h>
 #include "main.h"
 #include "user_timer.h"
 #include "user_uart.h"
@@ -40,7 +41,7 @@ int main(void){
         }
 
 		if (!BUTTON) {
-			USER_Delay_10ms()
+			USER_Delay_10ms();
 			if (!BUTTON) {
 				EngTrModel_U.Throttle = 1.45;
 				EngTrModel_U.BrakeTorque = 100.0;
