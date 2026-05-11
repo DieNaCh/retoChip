@@ -1,50 +1,111 @@
-/* ******************************************* START *********************************************** */
-/* Libraries, Definitions and Global Declarations */
-#include <stdint.h> // 							standard integer library
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
 #include "main.h"
-#include "user_keypad.h"
+#include "user_timer.h"
+#include "user_uart.h"
+#include "user_adc.h"
+#include "EngTrModel.h"
+#include "rtwtypes.h"
 
-// Array of our 4 LEDs mapped to their physical hardware addresses
-Pin LEDS[4] = {
-    { GPIOB, (0x1UL << 11U) }, // LED 3
-    { GPIOB, (0x1UL << 10U) }, // LED 2
-    { GPIOB, (0x1UL <<  9U) }, // LED 1
-    { GPIOB, (0x1UL <<  8U) }  // LED 0
-};
+// Define button macro
+#define BUTTON (GPIOA->IDR & ( 0x1UL << 1U ))
 
-/* Superloop structure */
-int main(void)
-{
-	/* Declarations and Initializations */
-	USER_SystemClock_Config( ); // 				configure the system clock to 64 MHz
-	USER_Keypad_Init( ); //						initialize keypad rows as output and columns as input, and LEDs as output
+int main(void){
+    USER_SystemClock_Config();
+    USER_GPIO_Init();
+    USER_ADC_Init();
+    USER_USART2_Init();
+	EngTrModel_initialize();
 	
-	/* Repetitive block */
+    /* Repetitive block */
     for(;;){
-		uint8_t key = USER_Key( );
+        if ((ADC->SR & ( 0x1UL << 1U ))) {
+            // 1. Read the raw 12-bit ADC value
+            uint32_t result = ADC->DR;
 
-		if (key != 0xFFU) {
-			// Validate the press occurred (debouncing)
-			USER_Delay_10ms();
+            // 2. Create a character buffer
+            char msgBuffer[32];
 
-			if (USER_Key() == key) {
-				// Clear LEDs
-				for (uint8_t i = 0; i < 4; i++) {
-					LEDS[i].port->ODR &= ~LEDS[i].mask;
-				}
+            // 3. Format the integer into a readable ASCII string
+            snprintf(msgBuffer, sizeof(msgBuffer), "ADC Value: %lu\r\n", result);
 
-				// Turn on corresponding LEDS
-				for (uint8_t i = 0; i < 4; i++) {
-					if (key & ( 1U << i )) {
-						LEDS[i].port->ODR |= LEDS[i].mask;
-					}
-				}
+            // 4. Calculate the exact length of the formatted string
+            uint16_t messageLength = strlen(msgBuffer);
 
-				while (USER_Key() != 0xFFU); // Wait for release
-				USER_Delay_10ms();
+            // 5. Send it using your custom function!
+            // Note: We cast msgBuffer to (uint8_t *) to keep the compiler happy, 
+            // since snprintf uses standard 'char' but your function strictly asks for 'uint8_t'.
+            USER_USART2_Transmit((uint8_t *)msgBuffer, messageLength);
+        }
+
+		if (!BUTTON) {
+			// 10 ms delay
+			if (!BUTTON) {
+				EngTrModel_U.Throttle = 1.45;
+				EngTrModel_U.BrakeTorque = 100.0;
 			}
 		}
+		else {
+			EngTrModel_U.Throttle = 50.0;
+			EngTrModel_U.BrakeTorque = 0.0;
+		}
+
+
+		EngTrModel_step();
+		printf("Vehicle Speed: %f\r\n", EngTrModel_Y.VehicleSpeed);
+		printf("Engine Speed: %f\r\n", EngTrModel_Y.EngineSpeed);
+		printf("Gear: %f\r\n", EngTrModel_Y.Gear);
+		// 40 ms delay
     }
+}
+
+void USER_ADC_Init( void ) {
+    // Step 0a: Enable clock for ADC1
+    RCC->APB2ENR |= ( 0x1UL << 9U );
+
+    // Step 0b: Adjust ADC input clock
+    RCC->CFGR |= ( 0x3UL << 14U );
+
+    // Step 1: Select operation mode
+    ADC->CR1 &= ~( 0x3UL << 18U );
+    ADC->CR1 &= ~( 0x3UL << 16U );
+
+    // Step 2: Determine the result format
+    ADC->CR2 &= ~( 0x1UL << 11U );
+    ADC->CR2 |= ( 0x1UL << 1U );
+
+    // Step 3: Determine the sample time for the ADC conversion
+    ADC->SMPR2 &= ~( 0x7UL << 0U );
+
+    // Step 4: Select the sequence and/or number of conversions for the ADC regular channels
+    ADC->SQR1 &= ~( 0xFUL << 20U );
+
+    // Step 5: Select channel 0 for conversion
+    ADC->SQR3 &= ~( 0x1F << 0U );
+
+    // Step 6: Enable the ADC module
+    ADC->CR2 |= ( 0x1UL << 0U );
+    USER_Delay_10ms();
+
+    // Step 7: Calibration
+    ADC->CR2 |= ( 0x1UL << 2U );
+    while (ADC->CR2 & ( 0x1UL << 2U ));
+
+    // Step 8: Start conversion
+    ADC->CR2 |= ( 0x1UL << 0U );
+}
+
+void USER_GPIO_Init( void ){
+	RCC->APB2ENR	|=	 ( 0x1UL <<  2U );//	IO port A clock enable
+	// PA0 as analog input
+	GPIOA->CRL      &=  ~( 0x3UL << 0U );
+    GPIOA->CRL      &=  ~( 0x3UL << 2U );
+	// PA1 as input pull up
+	GPIOA->ODR 		|= 	 ( 0x1UL << 1U );
+	GPIOA->CRL 		&=	~( 0x1UL << 6U );
+	GPIOA->CRL 		&=	~( 0x3UL << 4U );
+	GPIOA->CRL		|= 	 ( 0x2UL << 6U );
 }
 
 void USER_SystemClock_Config( void ){
