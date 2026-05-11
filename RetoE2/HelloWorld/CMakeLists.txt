@@ -43,6 +43,7 @@ set(cpu_PARAMS
 # Sources
 set(sources_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/lcd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/EngTrModel_data.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/EngTrModel.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/rt_nonfinite.c
