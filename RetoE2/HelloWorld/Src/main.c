@@ -40,7 +40,7 @@ int main(void){
         }
 
 		if (!BUTTON) {
-			// 10 ms delay
+			USER_Delay_10ms()
 			if (!BUTTON) {
 				EngTrModel_U.Throttle = 1.45;
 				EngTrModel_U.BrakeTorque = 100.0;
@@ -56,7 +56,7 @@ int main(void){
 		printf("Vehicle Speed: %f\r\n", EngTrModel_Y.VehicleSpeed);
 		printf("Engine Speed: %f\r\n", EngTrModel_Y.EngineSpeed);
 		printf("Gear: %f\r\n", EngTrModel_Y.Gear);
-		// 40 ms delay
+		USER_Delay_40ms();
     }
 }
 
@@ -128,5 +128,13 @@ void USER_Delay_10ms( void ){
 	__asm(" again10:	sub r0, r0, #1		");//	decrement the delay count
 	__asm("				cmp r0, #0			");//	check if the delay count has reached zero
 	__asm("				bne again10			");//	if not, repeat the process
+	__asm("				nop					");//	no operation (to ensure exact timing)
+}
+
+void USER_Delay_40ms( void ){
+	__asm(" 			ldr r0, =284444UL	");//	load the value to be used as delay count
+	__asm(" again40:	sub r0, r0, #1		");//	decrement the delay count
+	__asm("				cmp r0, #0			");//	check if the delay count has reached zero
+	__asm("				bne again40			");//	if not, repeat the process
 	__asm("				nop					");//	no operation (to ensure exact timing)
 }

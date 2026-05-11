@@ -133,6 +133,7 @@ void USER_SystemClock_Config( void );
 void USER_GPIO_Init( void );
 void USER_Delay_1sec( void );
 void USER_Delay_10ms( void );
+void USER_Delay_40ms( void );
 
 
 #endif /* MAIN_H_ */
