@@ -18,8 +18,8 @@
 #define MAX_THROTTLE 50.0
 #define MIN_BRAKE_TORQUE 0.0
 #define MAX_BRAKE_TORQUE 100.0
-#define MIN_ADC_VALUE 0
-#define MAX_ADC_VALUE 255
+#define MIN_ADC_VALUE 10.0
+#define MAX_ADC_VALUE 4100.0
 
 bool model_updated = false;
 
@@ -59,7 +59,7 @@ int main(void){
             uint32_t result = ADC->DR;
 
 			// Normalize result and update throttle and brake values
-			float relative_result = ( result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
+			float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
 			
 			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
 			EngTrModel_U.BrakeTorque = lerp(MIN_BRAKE_TORQUE, MAX_BRAKE_TORQUE, relative_result);
@@ -67,7 +67,7 @@ int main(void){
 
 		if (model_updated == 1) {
 			/* ---------------- Display velocity in LEDs ------------------- */
-			uint8_t vel = EngTrModel_Y.VehicleSpeed; // Rounded vehicle speed
+			uint32_t vel = EngTrModel_Y.VehicleSpeed; // Rounded vehicle speed
 			uint32_t ccr_val = CCR_STEP * vel;
 
 			TIM4->CCR1 = ccr_val;
