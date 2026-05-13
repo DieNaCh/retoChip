@@ -62,8 +62,19 @@ int main(void){
 			float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
 			
 			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
-			EngTrModel_U.BrakeTorque = lerp(MIN_BRAKE_TORQUE, MAX_BRAKE_TORQUE, relative_result);
         }
+
+		/* --------------- Brake torque through push button ----------------- */
+		if (!BUTTON) {
+			USER_TIM2_Delay_10ms();
+			if (!BUTTON) {
+				EngTrModel_U.Throttle = MIN_THROTTLE;
+				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
+			}
+		}
+		else {
+			EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
+		}
 
 		if (model_updated == 1) {
 			/* ---------------- Display velocity in LEDs ------------------- */
@@ -77,13 +88,17 @@ int main(void){
 			
 			/* ---------------- Display data in LCD Display ------------------- */
 
+			/* 	Display Format:
+				
+				Thr: xx.xx  G: x
+				RPM: xxxx.x
+			*/
+
             char lcd_buf[16]; // Buffer to hold data, using snprintf
 
 			// --- DISPLAY LINE 1 ---
 			LCD_Set_Cursor( 1, 1 );
-			
-			// Format: 
-			// Thr: xx.xx  G: x
+
 			// We use extra spaces at the end for formatting
 
 			// Throttle
@@ -119,11 +134,10 @@ int main(void){
             model_updated = 0; 
         }
 
-		// Debug
+		/* -------------- Debug --------------- */
 		// printf("Vehicle Speed: %f\r\n", EngTrModel_Y.VehicleSpeed);
 		// printf("Engine Speed: %f\r\n", EngTrModel_Y.EngineSpeed);
 		// printf("Gear: %f\r\n", EngTrModel_Y.Gear);
-		// USER_Delay_40ms();
     }
 }
 
