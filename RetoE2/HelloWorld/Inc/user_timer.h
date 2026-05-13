@@ -44,6 +44,10 @@
 #define TIM3_PSC_40MS 39
 #define TIM3_CNT_40MS 1536
 
+// PWM constants
+#define TIM4_PSC_PWM 0
+#define TIM4_ARR_PWM 63999
+
 void USER_TIM2_Init( void );
 void USER_TIM2_Delay_10us( void );
 void USER_TIM2_Delay_53us( void );
@@ -60,5 +64,7 @@ void USER_TIM2_Delay_2sec( void );
 
 void USER_TIM3_Init( void );
 void USER_TIM3_Delay_40ms( void );
+
+void USER_TIM4_Init( void );
 
 #endif /* USER_TIMER_H_ */

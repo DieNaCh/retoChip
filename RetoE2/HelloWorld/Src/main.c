@@ -12,7 +12,14 @@
 #include "rtwtypes.h"
 
 // Define button macro
-#define BUTTON (GPIOA->IDR & ( 0x1UL << 1U ))
+#define BUTTON (GPIOA->IDR & ( 0x1UL << 4U ))
+#define CCR_STEP  426 // Assumes max speed of 150
+#define MIN_THROTTLE 1.45
+#define MAX_THROTTLE 50.0
+#define MIN_BRAKE_TORQUE 0.0
+#define MAX_BRAKE_TORQUE 100.0
+#define MIN_ADC_VALUE 0
+#define MAX_ADC_VALUE 255
 
 bool model_updated = false;
 
@@ -25,11 +32,18 @@ void TIM3_IRQHandler( void ) {
 	}
 }
 
+// Linear interpolation between a and b
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+
 int main(void){
     USER_SystemClock_Config();
     USER_GPIO_Init();
 	USER_TIM2_Init( );
 	USER_TIM3_Init( );
+	USER_TIM4_Init( );
     USER_ADC_Init();
     USER_USART2_Init();
 	LCD_Init(); // MUST GO AFTER TIM2 INIT
@@ -39,39 +53,28 @@ int main(void){
 	
     /* Repetitive block */
     for(;;){
-        // if ((ADC->SR & ( 0x1UL << 1U ))) {
-        //     // 1. Read the raw 12-bit ADC value
-        //     uint32_t result = ADC->DR;
+		/* --------------- Throttle through potentiometer action ----------------- */
+		if ((ADC->SR & ( 0x1UL << 1U ))) {
+            // Read the raw 12-bit ADC value
+            uint32_t result = ADC->DR;
 
-        //     // 2. Create a character buffer
-        //     char msgBuffer[32];
-
-        //     // 3. Format the integer into a readable ASCII string
-        //     snprintf(msgBuffer, sizeof(msgBuffer), "ADC Value: %lu\r\n", result);
-
-        //     // 4. Calculate the exact length of the formatted string
-        //     uint16_t messageLength = strlen(msgBuffer);
-
-        //     // 5. Send it using your custom function!
-        //     // Note: We cast msgBuffer to (uint8_t *) to keep the compiler happy, 
-        //     // since snprintf uses standard 'char' but your function strictly asks for 'uint8_t'.
-        //     USER_USART2_Transmit((uint8_t *)msgBuffer, messageLength);
-        // }
-
-		/* --------------- Throttle through push button action ----------------- */
-		if (!BUTTON) {
-			USER_TIM2_Delay_10ms();
-			if (!BUTTON) {
-				EngTrModel_U.Throttle = 1.45;
-				EngTrModel_U.BrakeTorque = 100.0;
-			}
-		}
-		else {
-			EngTrModel_U.Throttle = 50.0;
-			EngTrModel_U.BrakeTorque = 0.0;
-		}
+			// Normalize result and update throttle and brake values
+			float relative_result = ( result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
+			
+			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
+			EngTrModel_U.BrakeTorque = lerp(MIN_BRAKE_TORQUE, MAX_BRAKE_TORQUE, relative_result);
+        }
 
 		if (model_updated == 1) {
+			/* ---------------- Display velocity in LEDs ------------------- */
+			uint8_t vel = EngTrModel_Y.VehicleSpeed; // Rounded vehicle speed
+			uint32_t ccr_val = CCR_STEP * vel;
+
+			TIM4->CCR1 = ccr_val;
+			TIM4->CCR2 = ccr_val;
+			TIM4->CCR3 = ccr_val;
+			TIM4->CCR4 = ccr_val;
+			
 			/* ---------------- Display data in LCD Display ------------------- */
 
             char lcd_buf[16]; // Buffer to hold data, using snprintf
@@ -162,14 +165,33 @@ void USER_ADC_Init( void ) {
 
 void USER_GPIO_Init( void ){
 	RCC->APB2ENR	|=	 ( 0x1UL <<  2U );//	IO port A clock enable
+	RCC->APB2ENR	|=	 ( 0x1UL <<  3U );//	IO port B clock enable
+
 	// PA0 as analog input
 	GPIOA->CRL      &=  ~( 0x3UL << 0U );
     GPIOA->CRL      &=  ~( 0x3UL << 2U );
-	// PA1 as input pull up
-	GPIOA->ODR 		|= 	 ( 0x1UL << 1U );
-	GPIOA->CRL 		&=	~( 0x1UL << 6U );
-	GPIOA->CRL 		&=	~( 0x3UL << 4U );
-	GPIOA->CRL		|= 	 ( 0x2UL << 6U );
+
+	// PB6 as alternate-function push-pull
+	GPIOB->CRL      &=  ~( 0x1UL << 26U ); 
+    GPIOB->CRL      |=   ( 0x2UL << 26U ) | ( 0x3UL << 24U );
+
+	// PB7 as alternate-function push-pull
+	GPIOB->CRL      &=  ~( 0x1UL << 30U ); 
+    GPIOB->CRL      |=   ( 0x2UL << 30U ) | ( 0x3UL << 28U );
+	
+	// PB8 as alternate-function push-pull
+	GPIOB->CRH      &=  ~( 0x1UL << 2U ); 
+    GPIOB->CRH      |=   ( 0x2UL << 2U ) | ( 0x3UL << 0U );
+	
+	// PB9 as alternate-function push-pull
+	GPIOB->CRH      &=  ~( 0x1UL << 6U ); 
+    GPIOB->CRH      |=   ( 0x2UL << 6U ) | ( 0x3UL << 4U );
+	
+	// PA4 as input pull up
+	GPIOA->ODR 		|= 	 ( 0x1UL << 4U );
+	GPIOA->CRL 		&=	~( 0x1UL << 18U );
+	GPIOA->CRL 		&=	~( 0x3UL << 16U );
+	GPIOA->CRL		|= 	 ( 0x2UL << 18U );
 }
 
 // void USER_Delay_10ms( void ){

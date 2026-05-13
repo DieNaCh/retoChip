@@ -68,6 +68,9 @@ typedef struct {
     volatile uint32_t ARR;
 	volatile uint32_t RESERVED0;
 	volatile uint32_t CCR1;
+	volatile uint32_t CCR2;
+	volatile uint32_t CCR3;
+	volatile uint32_t CCR4;
 } TIM_TypeDef;
 
 typedef struct {
@@ -111,6 +114,7 @@ typedef struct {
 
 #define TIM2_BASE 	0x40000000UL//		TIM2 base address
 #define TIM3_BASE 	0x40000400UL//		TIM3 base address
+#define TIM4_BASE 	0x40000800UL//		TIM4 base address
 #define FLASH_BASE	0x40022000UL//		FLASH base address
 #define RCC_BASE	0x40021000UL//		RCC base address
 #define GPIOA_BASE	0x40010800UL//		GPIO Port A base address
@@ -130,6 +134,7 @@ typedef struct {
 #define USART2		(( USER_USART_TypeDef *)USART2_BASE )//	USART base address points to USART structure
 #define TIM2 		(( TIM_TypeDef *)TIM2_BASE )//			TIM2 base address points to TIM structure
 #define TIM3 		(( TIM_TypeDef *)TIM3_BASE )//			TIM3 base address points to TIM structure
+#define TIM4 		(( TIM_TypeDef *)TIM4_BASE )//			TIM4 base address points to TIM structure
 #define NVIC 		(( NVIC_TypeDef *)NVIC_BASE )// 		NVIC base address points to NVIC structure
 #define ADC			(( ADC_TypeDef *)ADC_BASE )//			ADC base address points to ADC structure
 
