@@ -110,10 +110,12 @@ typedef struct {
 } ADC_TypeDef;
 
 #define TIM2_BASE 	0x40000000UL//		TIM2 base address
+#define TIM3_BASE 	0x40000400UL//		TIM3 base address
 #define FLASH_BASE	0x40022000UL//		FLASH base address
 #define RCC_BASE	0x40021000UL//		RCC base address
 #define GPIOA_BASE	0x40010800UL//		GPIO Port A base address
 #define GPIOB_BASE  0x40010C00UL// 		GPIO Port B base address
+#define GPIOC_BASE  0x40011000UL// 		GPIO Port C base address
 #define USART1_BASE 0x40013800UL//		USART1 base address
 #define USART2_BASE 0x40004400UL//		USART2 base address
 #define NVIC_BASE 	0xE000E100UL//		NVIC base address
@@ -123,17 +125,15 @@ typedef struct {
 #define RCC         (( RCC_TypeDef *)RCC_BASE )//			RCC base address points to RCC structure
 #define GPIOA		(( GPIO_TypeDef *)GPIOA_BASE )//		GPIO Port A base address points to GPIO structure
 #define GPIOB		(( GPIO_TypeDef *)GPIOB_BASE )//		GPIO Port B base address points to GPIO structure
+#define GPIOC		(( GPIO_TypeDef *)GPIOC_BASE )//		GPIO Port C base address points to GPIO structure
 #define USART1		(( USER_USART_TypeDef *)USART1_BASE )//	USART base address points to USART structure
 #define USART2		(( USER_USART_TypeDef *)USART2_BASE )//	USART base address points to USART structure
 #define TIM2 		(( TIM_TypeDef *)TIM2_BASE )//			TIM2 base address points to TIM structure
+#define TIM3 		(( TIM_TypeDef *)TIM3_BASE )//			TIM3 base address points to TIM structure
 #define NVIC 		(( NVIC_TypeDef *)NVIC_BASE )// 		NVIC base address points to NVIC structure
 #define ADC			(( ADC_TypeDef *)ADC_BASE )//			ADC base address points to ADC structure
 
 void USER_SystemClock_Config( void );
 void USER_GPIO_Init( void );
-void USER_Delay_1sec( void );
-void USER_Delay_10ms( void );
-void USER_Delay_40ms( void );
-
 
 #endif /* MAIN_H_ */
