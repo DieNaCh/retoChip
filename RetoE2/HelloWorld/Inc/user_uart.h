@@ -1,7 +1,8 @@
 #ifndef USER_UART_H_
 #define USER_UART_H_
 
-#define USARTDIV        0x0116//				    115200 baud rate at 32 MHz
+#define USART1DIV        0x022C//				    115200 baud rate at 64 MHz
+#define USART2DIV        0x0116//				    115200 baud rate at 32 MHz
 
 #define USART_CR1_UE    ( 0x1UL << 13U )
 #define USART_CR1_M     ( 0x1UL << 12U )

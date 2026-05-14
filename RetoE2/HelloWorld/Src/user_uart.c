@@ -10,7 +10,7 @@ void USER_USART1_Init( void ){
 	USART1->CR1		|=	 USART_CR1_UE;//		Step 1 Usart enabled
 	USART1->CR1		&=	~USART_CR1_M;//			Step 2 8 Data bits
 	USART1->CR2		&=	~USART_CR2_STOP;//		Step 3 1 Stop bit
-	USART1->BRR	 	|=	 USARTDIV;//			Step 5 Desired baud rate
+	USART1->BRR	 	|=	 USART1DIV;//			Step 5 Desired baud rate
 	USART1->CR1		|= 	 USART_CR1_TE;//		Step 6 Transmitter enabled
 	//pin PA9 (USART1_TX) as alternate function output push-pull, max speed 10MHz
 	GPIOA->CRH		&=	~( 0x1UL <<  6U ) &	~( 0x2UL <<  4U );
@@ -47,7 +47,7 @@ void USER_USART2_Init( void ){
 	USART2->CR1		|=	 USART_CR1_UE;//		Step 1 Usart enabled
 	USART2->CR1		&=	~USART_CR1_M;//			Step 2 8 Data bits
 	USART2->CR2		&=	~USART_CR2_STOP;//		Step 3 1 Stop bit
-	USART2->BRR	 	|=	 USARTDIV;//			Step 5 Desired baud rate
+	USART2->BRR	 	|=	 USART2DIV;//			Step 5 Desired baud rate
 	USART2->CR1		|= 	 USART_CR1_TE;//		Step 6 Transmitter enabled
 	//pin PA2 (USART2_TX) as alternate function output push-pull, max speed 10MHz
 	GPIOA->CRL		&=	~( 0x1UL <<  10U ) &	~( 0x2UL <<  8U );
