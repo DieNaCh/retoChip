@@ -45,6 +45,7 @@ int main(void){
 	USER_TIM3_Init( );
 	USER_TIM4_Init( );
     USER_ADC_Init();
+	USER_USART1_Init();
     USER_USART2_Init();
 	LCD_Init(); // MUST GO AFTER TIM2 INIT
 	EngTrModel_initialize();
@@ -128,7 +129,8 @@ int main(void){
                      EngTrModel_Y.EngineSpeed, 
                      EngTrModel_Y.Gear);
 
-            USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
+            USER_USART1_Transmit((uint8_t *)uart_buf, msg_len);
+			USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
 
             // Reset flag
             model_updated = 0; 
