@@ -21,7 +21,7 @@
 #define MIN_ADC_VALUE 10.0
 #define MAX_ADC_VALUE 4100.0
 
-bool model_updated = false;
+volatile bool model_updated = false;
 
 void TIM3_IRQHandler( void ) {
 	if ( TIM3->SR & ( 0x1UL << 0U ) ) {
