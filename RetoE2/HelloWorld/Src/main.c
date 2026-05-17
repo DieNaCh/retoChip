@@ -125,8 +125,9 @@ int main(void){
             char uart_buf[64]; // Buffer for transmission
 
             // Format and pack data into buffer
-            uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "Thr: %.2f | RPM: %.1f | Gear: %.0f\r\n", 
+            uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "Thr: %.2f | Spd: %.1f | RPM: %.1f | G: %.0f\r\n", 
                      EngTrModel_U.Throttle, 
+					 EngTrModel_Y.VehicleSpeed,
                      EngTrModel_Y.EngineSpeed, 
                      EngTrModel_Y.Gear);
 
