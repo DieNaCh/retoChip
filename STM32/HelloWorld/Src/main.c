@@ -113,7 +113,7 @@ int main(void){
 
 		if (model_updated == 1) {
 			/* ---------------- Display velocity in LEDs ------------------- */
-			uint32_t vel = EngTrModel_Y.VehicleSpeed; // Rounded vehicle speed
+			uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
 			uint32_t brightness = vel_to_brightness(vel);
 
 			TIM4->CCR1 = brightness;
