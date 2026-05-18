@@ -121,7 +121,7 @@ int main(void){
 			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", EngTrModel_Y.EngineSpeed);
 			LCD_Put_Str( lcd_buf );
 
-            /* -------------- UART Transmission of data to ESP8266 ------------- */
+            /* -------------- UART Transmission of data to ESP32 ------------- */
             char uart_buf[64]; // Buffer for transmission
 
             // Format and pack data into buffer
