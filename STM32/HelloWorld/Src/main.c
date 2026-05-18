@@ -13,7 +13,7 @@
 
 // Define button macro
 #define BUTTON (GPIOA->IDR & ( 0x1UL << 4U ))
-#define MAX_VEH_SPEED 150.0 // based on testing
+#define MAX_VEH_SPEED 135.0 // based on testing
 #define CCR_STEP  (1.0 * TIM4_ARR_PWM) / MAX_VEH_SPEED
 #define MIN_THROTTLE 1.45
 #define MAX_THROTTLE 50.0
