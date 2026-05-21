@@ -5,11 +5,26 @@
 #include <stddef.h>
 #include "main.h"
 #include "lcd.h"
+#include "portmacro.h"
 #include "user_timer.h"
 #include "user_uart.h"
 #include "user_adc.h"
 #include "EngTrModel.h"
 #include "rtwtypes.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+
+TaskHandle_t CommunicationTaskHandle;
+TaskHandle_t MotorOutputTaskHandle;
+TaskHandle_t VisualOutputTaskHandle;
+TaskHandle_t ModelInputTaskHandle;
+SemaphoreHandle_t ModelUpdateSemaphore;
+
+void CommunicationTask( void *pvParameters );
+void MotorOutputTask( void *pvParameters );
+void VisualOutputTask( void *pvParameters );
+void ModelInputTask( void *pvParameters );
 
 // Define button macro
 #define BUTTON (GPIOA->IDR & ( 0x1UL << 4U ))
@@ -43,12 +58,19 @@ const uint8_t gamma8[] = {
 177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
 215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
+const uint8_t init_message[] = "Initializing Scheduler...\r\n";
+
 void TIM3_IRQHandler( void ) {
 	if ( TIM3->SR & ( 0x1UL << 0U ) ) {
-		EngTrModel_step();
-		model_updated = true;
+		// Clear timer flags
 		TIM3->SR &= ~( 0x1UL << 0U );
 		TIM3->CNT = TIM3_CNT_40MS;
+
+		// Wake up tasks
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR( ModelUpdateSemaphore, &xHigherPriorityTaskWoken );
+
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }
 
@@ -85,96 +107,24 @@ int main(void){
 	EngTrModel_initialize();
 	USER_TIM3_Delay_40ms();
 	LCD_Clear( );
+
+	// Create the semaphore
+	ModelUpdateSemaphore = xSemaphoreCreateBinary();
+
+	// Create FreeRTOS tasks
+	xTaskCreate( CommunicationTask, "CommunicationTask", 256, NULL, 1, &CommunicationTaskHandle );
+	xTaskCreate( VisualOutputTask, "VisualOutputTask", 256, NULL, 1, &VisualOutputTaskHandle );
+	xTaskCreate( ModelInputTask, "ModelInputTask", 128, NULL, 3, &ModelInputTaskHandle );
+
+	// TODO: Implement Task!
+	// xTaskCreate( MotorOutputTask, "MotorOutputTask", 128, NULL, 2, &MotorOutputTaskHandle );
+
+	USER_USART1_Transmit(init_message, sizeof( init_message ));
+	vTaskStartScheduler();
 	
     /* Repetitive block */
     for(;;){
-		/* --------------- Throttle through potentiometer action ----------------- */
-		if ((ADC->SR & ( 0x1UL << 1U ))) {
-            // Read the raw 12-bit ADC value
-            uint32_t result = ADC->DR;
 
-			// Normalize result and update throttle and brake values
-			float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
-			
-			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
-        }
-
-		/* --------------- Brake torque through push button ----------------- */
-		if (!BUTTON) {
-			USER_TIM2_Delay_10ms();
-			if (!BUTTON) {
-				EngTrModel_U.Throttle = MIN_THROTTLE;
-				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
-			}
-		}
-		else {
-			EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
-		}
-
-		if (model_updated == 1) {
-			/* ---------------- Display velocity in LEDs ------------------- */
-			uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
-			uint32_t brightness = vel_to_brightness(vel);
-
-			TIM4->CCR1 = brightness;
-			TIM4->CCR2 = brightness;
-			TIM4->CCR3 = brightness;
-			TIM4->CCR4 = brightness;
-			
-			/* ---------------- Display data in LCD Display ------------------- */
-
-			/* 	Display Format:
-				
-				Thr: xx.xx  G: x
-				RPM: xxxx.x
-			*/
-
-            char lcd_buf[16]; // Buffer to hold data, using snprintf
-
-			// --- DISPLAY LINE 1 ---
-			LCD_Set_Cursor( 1, 1 );
-
-			// We use extra spaces at the end for formatting
-
-			// Throttle
-			LCD_Put_Str( "Thr: " ); 
-			snprintf(lcd_buf, sizeof(lcd_buf), "%.2f  ", EngTrModel_U.Throttle);
-			LCD_Put_Str( lcd_buf ); 
-
-			// Gear
-			LCD_Put_Str( "G: " );
-			snprintf(lcd_buf, sizeof(lcd_buf), "%.0f ", EngTrModel_Y.Gear);
-			LCD_Put_Str( lcd_buf );
-			
-			// --- DISPLAY LINE 2 ---
-			LCD_Set_Cursor( 2, 1 );
-			
-			// RPM
-			LCD_Put_Str( "RPM: " );
-			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", EngTrModel_Y.EngineSpeed);
-			LCD_Put_Str( lcd_buf );
-
-            /* -------------- UART Transmission of data to ESP32 ------------- */
-            char uart_buf[64]; // Buffer for transmission
-
-            // Format and pack data into buffer
-            uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "Thr: %.2f | Spd: %.1f | RPM: %.1f | G: %.0f\r\n", 
-                     EngTrModel_U.Throttle, 
-					 EngTrModel_Y.VehicleSpeed,
-                     EngTrModel_Y.EngineSpeed, 
-                     EngTrModel_Y.Gear);
-
-            USER_USART1_Transmit((uint8_t *)uart_buf, msg_len);
-			USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
-
-            // Reset flag
-            model_updated = 0; 
-        }
-
-		/* -------------- Debug --------------- */
-		// printf("Vehicle Speed: %f\r\n", EngTrModel_Y.VehicleSpeed);
-		// printf("Engine Speed: %f\r\n", EngTrModel_Y.EngineSpeed);
-		// printf("Gear: %f\r\n", EngTrModel_Y.Gear);
     }
 }
 
@@ -260,3 +210,109 @@ void USER_GPIO_Init( void ){
 // 	__asm("				bne again40			");//	if not, repeat the process
 // 	__asm("				nop					");//	no operation (to ensure exact timing)
 // }
+
+
+void CommunicationTask( void *pvParameters ) {
+	for (;;) {
+		/* -------------- UART Transmission of data to ESP32 ------------- */
+		char uart_buf[64]; // Buffer for transmission
+
+		// Format and pack data into buffer
+		uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "Thr: %.2f | Spd: %.1f | RPM: %.1f | G: %.0f\r\n", 
+					EngTrModel_U.Throttle, 
+					EngTrModel_Y.VehicleSpeed,
+					EngTrModel_Y.EngineSpeed, 
+					EngTrModel_Y.Gear);
+
+		USER_USART1_Transmit((uint8_t *)uart_buf, msg_len);
+		USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
+
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+}
+
+void MotorOutputTask( void *pvParameters ) {
+	for (;;) {
+		// TODO: Implement task
+	}
+}
+
+void VisualOutputTask( void *pvParameters ) {
+	for (;;) {
+		if (xSemaphoreTake(ModelUpdateSemaphore, portMAX_DELAY) == pdTRUE) {
+			// Step into the model
+			EngTrModel_step();
+			
+			/* ---------------- Display velocity in LEDs ------------------- */
+			uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
+			uint32_t brightness = vel_to_brightness(vel);
+
+			TIM4->CCR1 = brightness;
+			TIM4->CCR2 = brightness;
+			TIM4->CCR3 = brightness;
+			TIM4->CCR4 = brightness;
+			
+			/* ---------------- Display data in LCD Display ------------------- */
+
+			/* 	Display Format:
+				
+				Thr: xx.xx  G: x
+				RPM: xxxx.x
+			*/
+
+			char lcd_buf[16]; // Buffer to hold data, using snprintf
+
+			// --- DISPLAY LINE 1 ---
+			LCD_Set_Cursor( 1, 1 );
+
+			// We use extra spaces at the end for formatting
+
+			// Throttle
+			LCD_Put_Str( "Thr: " ); 
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.2f  ", EngTrModel_U.Throttle);
+			LCD_Put_Str( lcd_buf ); 
+
+			// Gear
+			LCD_Put_Str( "G: " );
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.0f ", EngTrModel_Y.Gear);
+			LCD_Put_Str( lcd_buf );
+			
+			// --- DISPLAY LINE 2 ---
+			LCD_Set_Cursor( 2, 1 );
+			
+			// RPM
+			LCD_Put_Str( "RPM: " );
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", EngTrModel_Y.EngineSpeed);
+			LCD_Put_Str( lcd_buf );
+		}
+	}
+}
+
+void ModelInputTask( void *pvParameters ) {
+	for (;;) {
+		/* --------------- Throttle through potentiometer action ----------------- */
+		if ((ADC->SR & ( 0x1UL << 1U ))) {
+            // Read the raw 12-bit ADC value
+            uint32_t result = ADC->DR;
+
+			// Normalize result and update throttle and brake values
+			float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
+			
+			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
+        }
+
+		/* --------------- Brake torque through push button ----------------- */
+		if (!BUTTON) {
+			vTaskDelay(pdMS_TO_TICKS(10));
+			if (!BUTTON) {
+				EngTrModel_U.Throttle = MIN_THROTTLE;
+				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
+			}
+		}
+		else {
+			EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
+		}
+
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+}
