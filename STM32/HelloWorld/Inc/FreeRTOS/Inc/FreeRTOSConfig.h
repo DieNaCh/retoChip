@@ -112,7 +112,7 @@ extern char _Min_Stack_Size; /* Defined in the linker script */
 #define configMINIMAL_STACK_SIZE          ((uint16_t)((uint32_t)&_Min_Stack_Size/8))
 #endif
 #ifndef configTOTAL_HEAP_SIZE
-#define configTOTAL_HEAP_SIZE             ((size_t)((uint32_t)&_estack - (uint32_t)&_Min_Stack_Size - (uint32_t)&_end))
+#define configTOTAL_HEAP_SIZE             ((size_t)4096)
 #endif
 #ifndef configISR_STACK_SIZE_WORDS
 #define configISR_STACK_SIZE_WORDS        ((uint32_t)&_Min_Stack_Size/4)
@@ -120,7 +120,7 @@ extern char _Min_Stack_Size; /* Defined in the linker script */
 
 #define configUSE_PREEMPTION              1
 #define configUSE_IDLE_HOOK               1
-#define configUSE_TICK_HOOK               1
+#define configUSE_TICK_HOOK               0
 #define configCPU_CLOCK_HZ                (SystemCoreClock)
 #define configTICK_RATE_HZ                ((TickType_t)1000)
 #define configMAX_TASK_NAME_LEN           (16)
