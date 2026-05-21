@@ -42,7 +42,8 @@ set(cpu_PARAMS
 
 # Sources
 set(sources_SRCS
-	${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c
+	# Main sources
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/lcd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/EngTrModel_data.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/EngTrModel.c
@@ -51,11 +52,25 @@ set(sources_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/rtGetNaN.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/user_timer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/user_uart.c
+
+    # RTOS sources
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/croutine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/event_groups.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/list.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/queue.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/stream_buffer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/tasks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/FreeRTOS/Src/timers.c
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/FreeRTOS/portable/GCC/ARM_CM3/port.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/FreeRTOS/portable/MemMang/heap_4.c
 )
 
 # Include directories for all compilers
 set(include_DIRS
 	${CMAKE_CURRENT_SOURCE_DIR}/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/FreeRTOS/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/FreeRTOS/portable/GCC/ARM_CM3
 )
 
 # Include directories for each compiler
