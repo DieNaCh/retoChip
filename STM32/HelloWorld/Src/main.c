@@ -93,56 +93,13 @@ int main(void){
 	LCD_Clear( );
 	float timeS, timeE, timeT;
 	uint16_t start, end, total = 0;
-
-    // --- TIM1 INITIALIZATION (PROFILING) ---
-    RCC->APB2ENR |=   ( 0x1UL << 11U );//   enable TIM1 clock (APB2, Bit 11)
-    
-    TIM1->SMCR   &=  ~( 0x7UL <<  0U );//   select internal clock
-    TIM1->CR1    &=  ~( 0x3UL <<  5U )//    edge-aligned mode
-                 &   ~( 0x1UL <<  4U )//    upcounter
-                 &   ~( 0x1UL <<  1U );//   update event (UEV) enabled
-    TIM1->SR     &=  ~( 0x1UL <<  0U );//   clear TIM overflow-event flag
-    
-    TIM1->PSC     =     1953;//             time range: 30.5us per tick
-    TIM1->ARR     =   0xFFFF;//             16-bit max limit
-    
-    TIM1->EGR    |=   ( 0x1UL <<  0U );//   update the prescaler
-    TIM1->CNT     =     0;//                clear count 
-    TIM1->CR1    |=   ( 0x1UL <<  0U );//   timer enabled
-
-	char buf[64];
-	uint16_t time_len;
-	timeS = (1.0 / 64000000) * total * ( TIM1->PSC + 1);
-	time_len = snprintf(buf, sizeof(buf), "Time is: %f\r\n",
-		timeS
-	);
-	USER_USART2_Transmit((uint8_t *)buf, time_len);
 	
     /* Repetitive block */
     for(;;){
-		TIM1->CNT = 0;
-		start = TIM1->CNT;
-		VisualOutputTask();
-		end = TIM1->CNT;
-
-		total = end - start;
-		timeE = (1.0 / 64000000) * total * (TIM1->PSC + 1);
-		
-		time_len = snprintf(buf, sizeof(buf), "Time is: %.8f\r\n",
-			timeE
-		);
-		USER_USART2_Transmit((uint8_t *)buf, time_len);
-		timeT = timeS + timeE;
-
-		
-		time_len = snprintf(buf, sizeof(buf), "Time is: %.8f\r\n",
-			timeT
-		);
-		USER_USART2_Transmit((uint8_t *)buf, time_len);
-
-		ModelInputTask();
 		ModelUpdateTask();
 		CommunicationTask();
+		VisualOutputTask();
+		ModelInputTask();
 
 		/* -------------- Debug --------------- */
 		// printf("Vehicle Speed: %f\r\n", EngTrModel_Y.VehicleSpeed);
