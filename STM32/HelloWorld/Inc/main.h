@@ -112,6 +112,7 @@ typedef struct {
 	volatile uint32_t DR;
 } ADC_TypeDef;
 
+#define TIM1_BASE 	0x40012C00UL//		TIM1 base address
 #define TIM2_BASE 	0x40000000UL//		TIM2 base address
 #define TIM3_BASE 	0x40000400UL//		TIM3 base address
 #define TIM4_BASE 	0x40000800UL//		TIM4 base address
@@ -132,6 +133,7 @@ typedef struct {
 #define GPIOC		(( GPIO_TypeDef *)GPIOC_BASE )//		GPIO Port C base address points to GPIO structure
 #define USART1		(( USER_USART_TypeDef *)USART1_BASE )//	USART base address points to USART structure
 #define USART2		(( USER_USART_TypeDef *)USART2_BASE )//	USART base address points to USART structure
+#define TIM1 		(( TIM_TypeDef *)TIM1_BASE )//			TIM1 base address points to TIM structure
 #define TIM2 		(( TIM_TypeDef *)TIM2_BASE )//			TIM2 base address points to TIM structure
 #define TIM3 		(( TIM_TypeDef *)TIM3_BASE )//			TIM3 base address points to TIM structure
 #define TIM4 		(( TIM_TypeDef *)TIM4_BASE )//			TIM4 base address points to TIM structure
