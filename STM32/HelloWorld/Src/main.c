@@ -91,15 +91,13 @@ int main(void){
 	EngTrModel_initialize();
 	USER_TIM3_Delay_40ms();
 	LCD_Clear( );
-	float timeS, timeE, timeT;
-	uint16_t start, end, total = 0;
 	
     /* Repetitive block */
     for(;;){
 		ModelUpdateTask();
 		CommunicationTask();
-		VisualOutputTask();
 		ModelInputTask();
+		VisualOutputTask();
 
 		/* -------------- Debug --------------- */
 		// printf("Vehicle Speed: %f\r\n", EngTrModel_Y.VehicleSpeed);
@@ -117,14 +115,14 @@ void CommunicationTask() {
 	char uart_buf[64]; // Buffer for transmission
 
 	// Format and pack data into buffer
-	uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "Thr: %.2f | Spd: %.1f | RPM: %.1f | G: %.0f\r\n", 
+	uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "T: %.2f | S: %.1f | R: %.1f | G: %.0f\r\n", 
 				EngTrModel_U.Throttle, 
 				EngTrModel_Y.VehicleSpeed,
 				EngTrModel_Y.EngineSpeed, 
 				EngTrModel_Y.Gear);
 
 	USER_USART1_Transmit((uint8_t *)uart_buf, msg_len);
-	USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
+	// USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
 }
 
 void ModelUpdateTask() {
