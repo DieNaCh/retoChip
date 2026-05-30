@@ -94,7 +94,6 @@ int main(void){
 	
     /* Repetitive block */
     for(;;){
-		ModelUpdateTask();
 		CommunicationTask();
 		ModelInputTask();
 		VisualOutputTask();
