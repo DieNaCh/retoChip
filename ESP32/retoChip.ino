@@ -77,7 +77,7 @@ void loop() {
     int temp_gear = 0;
 
 
-    int leidos = sscanf(incomingData.c_str(), "Thr: %f | Spd: %f | RPM: %f | Gear: %d", &temp_thr, &temp_vel, &temp_rpm, &temp_gear);
+    int leidos = sscanf(incomingData.c_str(), "T: %f | S: %f | R: %f | G: %d", &temp_thr, &temp_vel, &temp_rpm, &temp_gear);
 
     if (leidos == 4) {
       vel_motor = temp_thr;             // Thr -> motor
