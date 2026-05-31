@@ -2,8 +2,8 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "iPhone de Diego (4)";
-const char* password = "NIKO2016";
+const char* ssid = "INFINITUM9EE6_2.4";
+const char* password = "JPnm7mX92t";
 const char* mqtt_server = "192.168.137.62"; 
 const int mqtt_port = 1883; 
 const char* mqtt_user = "";   
@@ -17,6 +17,7 @@ unsigned long lastMsg = 0;
 const int msgInterval = 2000;
 
 float vel_motor = 10.0;
+float vel_sped = 5.0;
 float vel_veh = 5.0;
 String marchaS = "";
 
@@ -72,7 +73,7 @@ void loop() {
 
     // Variables temporales para guardar lo extraído
     float temp_thr = 0.0;
-    float temp_vel = 0.0
+    float temp_vel = 0.0;
     float temp_rpm = 0.0;
     int temp_gear = 0;
 
