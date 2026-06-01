@@ -4,7 +4,7 @@
 
 const char* ssid = "INFINITUM9EE6_2.4";
 const char* password = "JPnm7mX92t";
-const char* mqtt_server = "192.168.137.62"; 
+const char* mqtt_server = "192.168.1.99"; 
 const int mqtt_port = 1883; 
 const char* mqtt_user = "";   
 const char* mqtt_password = ""; 
@@ -14,7 +14,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 unsigned long lastMsg = 0;
-const int msgInterval = 2000;
+const int msgInterval = 120;
 
 float vel_motor = 10.0;
 float vel_sped = 5.0;
@@ -95,7 +95,7 @@ void loop() {
     
     JsonDocument jsonDocument; 
     jsonDocument["motor"] = vel_motor; 
-    jsonDocument["sped"] = vel_sped;
+    jsonDocument["spd"] = vel_sped;
     jsonDocument["vl"] = vel_veh; 
     jsonDocument["marcha"] = marchaS;
  
