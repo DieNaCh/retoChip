@@ -11,19 +11,19 @@ ORG = "TE2003B"
 BUCKET = "reto"
 URL = "http://localhost:8086"
 
-MQTT_BROKER = "192.168.137.62"  
+MQTT_BROKER = "192.168.1.99"  
 MQTT_PORT = 1883 
 MQTT_TOPIC = "motor/data" 
 
 CSV_FILENAME = "motor_data.csv"
-CSV_HEADER = ["timestamp", "rpm", "velocidad", "marcha"]
+CSV_HEADER = ["timestamp", "rpm", "velocidad", "marcha", "vel_vehiculo"]
 
 
 # ==========================================
 # CSV
 # ==========================================
 
-def write_to_csv(timestamp, rpm, vl, marcha):
+def write_to_csv(timestamp, rpm, vl, speed, marcha):
     with open(CSV_FILENAME, 'a', newline='') as csvfile:
         writer = csv.writer(csvfile)
 
@@ -35,7 +35,8 @@ def write_to_csv(timestamp, rpm, vl, marcha):
             timestamp,
             f"{rpm:.2f}",
             f"{vl:.2f}",
-            marcha
+            marcha,
+            f"{speed:.2f}",
         ])
 
 # ==========================================
@@ -44,10 +45,11 @@ def write_to_csv(timestamp, rpm, vl, marcha):
 influx_client = InfluxDBClient(url=URL, token=TOKEN, org=ORG)
 write_api = influx_client.write_api(write_options=SYNCHRONOUS)
 
-def guardar_en_influx(motor, vl, marcha):
+def guardar_en_influx(motor, vl, marcha, speed):
     try:
         motor_float = float(motor)
         vl_float = float(vl)        
+        speed_float = float(speed)
         marcha_int = int(float(marcha))
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -57,14 +59,15 @@ def guardar_en_influx(motor, vl, marcha):
             .tag("sensor_set", "motor_v1") \
             .field("thr", motor_float) \
             .field("rpm", vl_float) \
+            .field("speed", speed_float) \
             .field("marcha", marcha_int)
             
         write_api.write(bucket=BUCKET, org=ORG, record=punto)
         
-        write_to_csv(timestamp, motor_float, vl_float, marcha_int)
+        write_to_csv(timestamp, motor_float, vl_float, speed_float, marcha_int)
 
         
-        print(f"[OK] Guardado en DB -> Thr: {motor_float:.2f} | RPM: {vl_float:.1f} | Gear: {marcha_int}")
+        print(f"[OK] Guardado en DB -> Thr: {motor_float:.2f} | Spd: {speed_float:.1f} | RPM: {vl_float:.1f} | Gear: {marcha_int}")
         
     except Exception as e:
         print(f"\n[ERROR CRITICO InfluxDB]: {e}")
@@ -87,9 +90,10 @@ def on_message(client, userdata, msg):
         
         motor_val = data["motor"]
         vl_val = data["vl"]
+        sped_val = data["spd"]
         marcha_val = data["marcha"]
         
-        guardar_en_influx(motor_val, vl_val, marcha_val)
+        guardar_en_influx(motor_val, vl_val, marcha_val, sped_val)
 
     except json.JSONDecodeError:
         print("[ERROR] El mensaje recibido no es un JSON valido.")
