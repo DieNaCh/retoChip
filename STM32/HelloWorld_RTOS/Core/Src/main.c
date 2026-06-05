@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "main.h"
+#include "projdefs.h"
 #include "user_uart.h"
 #include "lcd.h"
 #include "user_timer.h"
@@ -13,6 +14,7 @@
 #include "FreeRTOSConfig.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 
 #define BUTTON (GPIOA->IDR & ( 0x1UL << 4U ))
 #define MAX_VEH_SPEED 134.0 // based on testing
@@ -23,6 +25,7 @@
 #define MAX_BRAKE_TORQUE 100.0
 #define MIN_ADC_VALUE 10.0
 #define MAX_ADC_VALUE 4100.0
+#define COMMUNICATION_TASK_PERIOD 40
 
 volatile bool model_updated_task[2] = {false, false};
 
@@ -46,12 +49,24 @@ const uint8_t gamma8[] = {
 215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
 TaskHandle_t Task1Handle;
+QueueHandle_t xModelQueue;
+
+typedef struct {
+	// Inputs
+	real_T Throttle;
+	real_T BrakeToggle;
+
+	// Outputs
+	real_T EngineSpeed;
+	real_T VehicleSpeed;
+	real_T Gear;
+} ModelData;
 
 void USER_SystemClock_Config( void );
 void StartTask1( void *pvParameters );
 
 void CommunicationTask( void *pvParameters );
-void VisualOutputTask( void *pvParameters );
+void LCDTask( void *pvParameters );
 void ModelInputTask( void *pvParameters );
 void ModelUpdateTask( void *pvParameters );
 
@@ -84,6 +99,24 @@ uint32_t vel_to_brightness(uint32_t vel) {
 	return corrected_brightness;
 }
 
+// Function that updates model data based on received values
+void update_data(ModelData *source, ModelData *target) {
+	target->BrakeToggle += source->BrakeToggle;
+	target->EngineSpeed += source->EngineSpeed;
+	target->VehicleSpeed += source->VehicleSpeed;
+	target->Gear += source->Gear;
+	target->Throttle += source->Throttle;
+}
+
+// Function that averages model data
+void get_average(ModelData *data, uint8_t n) {
+	data->BrakeToggle /= n;
+	data->EngineSpeed /= n;
+	data->VehicleSpeed /= n;
+	data->Gear /= n;
+	data->Throttle /= n;
+}
+
 /* Superloop structure */
 int main(void)
 {
@@ -104,6 +137,8 @@ int main(void)
 
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
 	xTaskCreate(StartTask1, "Task1", 128, NULL, 2, &Task1Handle);
+
+	xModelQueue = xQueueCreate(4, sizeof ( ModelData ));
 
 	/* Start the scheduler */
 	printf("Heap Available: %u bytes\r\n", xPortGetFreeHeapSize());
@@ -128,33 +163,52 @@ void StartTask1(void *pvParameters) {
 
 void CommunicationTask( void *pvParameters ) {
 	// Only run if model has been updated
-	if (!model_updated_task[0]) return;
-	model_updated_task[0] = false;
+	ModelData retVal;
+	TickType_t xLastWakeTime = xTaskGetTickCount();
 
-	/* -------------- UART Transmission of data to ESP32 ------------- */
-	char uart_buf[64]; // Buffer for transmission
+	for(;;) {
+		/* -------------- UART Transmission of data to ESP32 ------------- */
+		ModelData UARTData;
+		
+		// Only perform transmission if there's data available
+		if (xQueueReceive(xModelQueue, &retVal, 0) == pdTRUE) {
+			// Take current data
+			uint8_t takenValues = 1;
+			UARTData = retVal;
 
-	// Format and pack data into buffer
-	uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "T: %.2f | S: %.1f | R: %.1f | G: %.0f\r\n", 
-				EngTrModel_U.Throttle, 
-				EngTrModel_Y.VehicleSpeed,
-				EngTrModel_Y.EngineSpeed, 
-				EngTrModel_Y.Gear);
+			// Take all and get average on whatever remains
+			while (xQueueReceive(xModelQueue, &retVal, 0) == pdTRUE) {
+				takenValues++;
+				update_data(&retVal, &UARTData);
+			}
+			
+			get_average(&UARTData, takenValues);
 
-	USER_USART1_Transmit((uint8_t *)uart_buf, msg_len);
-	// USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
+			char uart_buf[64]; // Buffer for transmission
+
+			// Format and pack data into buffer
+			uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "T: %.2f | S: %.1f | R: %.1f | G: %.0f\r\n", 
+						UARTData.Throttle, 
+						UARTData.VehicleSpeed,
+						UARTData.EngineSpeed, 
+						UARTData.Gear);
+
+			USER_USART1_Transmit((uint8_t *)uart_buf, msg_len);
+
+			/* DEBUG ONLY: transmits buffer to terminal
+				USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
+			*/
+		}
+
+		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
+	}
 }
 
 void ModelUpdateTask( void *pvParameters ) {
 	// Step into the model
 	EngTrModel_step();
-}
 
-void VisualOutputTask( void *pvParameters ) {
-	// Only run if model has been updated
-	if (!model_updated_task[1]) return;
-	model_updated_task[1] = false;
-
+	// Output PWM
 	/* ---------------- Display velocity in LEDs ------------------- */
 	uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
 	uint32_t brightness = vel_to_brightness(vel);
@@ -163,6 +217,12 @@ void VisualOutputTask( void *pvParameters ) {
 	TIM4->CCR2 = brightness;
 	TIM4->CCR3 = brightness;
 	TIM4->CCR4 = brightness;
+}
+
+void LCDTask( void *pvParameters ) {
+	// Only run if model has been updated
+	if (!model_updated_task[1]) return;
+	model_updated_task[1] = false;
 	
 	/* ---------------- Display data in LCD Display ------------------- */
 
