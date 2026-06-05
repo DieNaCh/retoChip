@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "main.h"
+#include "FreeRTOS.h"
+#include "portmacro.h"
 #include "projdefs.h"
 #include "user_uart.h"
 #include "lcd.h"
@@ -12,7 +14,6 @@
 #include "EngTrModel.h"
 #include "rtwtypes.h"
 #include "FreeRTOSConfig.h"
-#include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
 
@@ -25,7 +26,9 @@
 #define MAX_BRAKE_TORQUE 100.0
 #define MIN_ADC_VALUE 10.0
 #define MAX_ADC_VALUE 4100.0
-#define COMMUNICATION_TASK_PERIOD 40
+#define COMMUNICATION_TASK_PERIOD 120
+#define MODEL_UPDATE_TASK_PERIOD 40
+#define MODEL_QUEUE_SIZE 5
 
 volatile bool model_updated_task[2] = {false, false};
 
@@ -138,7 +141,7 @@ int main(void)
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
 	xTaskCreate(StartTask1, "Task1", 128, NULL, 2, &Task1Handle);
 
-	xModelQueue = xQueueCreate(4, sizeof ( ModelData ));
+	xModelQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
 
 	/* Start the scheduler */
 	printf("Heap Available: %u bytes\r\n", xPortGetFreeHeapSize());
@@ -205,18 +208,37 @@ void CommunicationTask( void *pvParameters ) {
 }
 
 void ModelUpdateTask( void *pvParameters ) {
-	// Step into the model
-	EngTrModel_step();
+	TickType_t xLastWakeTime = xTaskGetTickCount();
 
-	// Output PWM
-	/* ---------------- Display velocity in LEDs ------------------- */
-	uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
-	uint32_t brightness = vel_to_brightness(vel);
+	for(;;) {
+		// Step into the model
+		EngTrModel_step();
 
-	TIM4->CCR1 = brightness;
-	TIM4->CCR2 = brightness;
-	TIM4->CCR3 = brightness;
-	TIM4->CCR4 = brightness;
+		// Output PWM
+		// TODO: Adapt to motor output
+		/* ---------------- Display velocity in LEDs ------------------- */
+		uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
+		uint32_t brightness = vel_to_brightness(vel);
+
+		TIM4->CCR1 = brightness;
+		TIM4->CCR2 = brightness;
+		TIM4->CCR3 = brightness;
+		TIM4->CCR4 = brightness;
+
+		// Write model data to queue
+		ModelData updatedData = {
+			.Throttle 		= EngTrModel_U.Throttle,
+			.BrakeToggle 	= EngTrModel_U.BrakeTorque,
+			
+			.EngineSpeed 	= EngTrModel_Y.EngineSpeed,
+			.VehicleSpeed 	= EngTrModel_Y.VehicleSpeed,
+			.Gear 			= EngTrModel_Y.Gear,
+		};
+
+		xQueueSend(xModelQueue, &updatedData, 0);
+
+		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
+	}
 }
 
 void LCDTask( void *pvParameters ) {
