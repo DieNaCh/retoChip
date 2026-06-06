@@ -304,6 +304,7 @@ void LCDTask( void *pvParameters ) {
 
 void ModelInputTask( void *pvParameters ) {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
+	bool button_pressed_previous_cycle = 0;
 
 	for(;;) {
 		/* --------------- Throttle through potentiometer action ----------------- */
@@ -319,14 +320,18 @@ void ModelInputTask( void *pvParameters ) {
 
 		/* --------------- Brake torque through push button ----------------- */
 		if (!BUTTON) {
-			USER_TIM2_Delay_10ms();
-			if (!BUTTON) {
+			// We need to debounce. We'd usually do this through a hardware delay with TIM2.
+			// However, we can use the task's period itself as a debounce.
+			if (button_pressed_previous_cycle) {
 				EngTrModel_U.Throttle = MIN_THROTTLE;
 				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
 			}
+			
+			button_pressed_previous_cycle = 1;
 		}
 		else {
 			EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
+			button_pressed_previous_cycle = 0;
 		}
 
 		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
