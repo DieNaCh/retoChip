@@ -150,21 +150,23 @@ int main(void)
 	USER_SystemClock_Config( );
 	USER_GPIO_Init();
 	USER_TIM2_Init( );
-	USER_TIM3_Init( );
 	USER_TIM4_Init( );
     USER_ADC_Init();
 	USER_USART1_Init();
     USER_UART2_Init();
 	LCD_Init(); // MUST GO AFTER TIM2 INIT
 	EngTrModel_initialize();
-	USER_TIM3_Delay_40ms();
+
+	// Uncomment these if interrupt is added back:
+	// USER_TIM3_Init( );
+	// USER_TIM3_Delay_40ms();
 	LCD_Clear( );
 
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
 	xTaskCreate(CommunicationTask, "CommunicationTask", 512, NULL, 1, &CommunicationTaskHandle);
 	xTaskCreate(LCDTask, "LCDTask", 512, NULL, 2, &LCDTaskHandle);
-	xTaskCreate(ModelInputTask, "ModelInputTask", 512, NULL, 3, &ModelInputTaskHandle);
-	xTaskCreate(ModelUpdateTask, "ModelUpdateTask", 512, NULL, 4, &ModelUpdateTaskHandle);
+	xTaskCreate(ModelInputTask, "ModelInputTask", 128, NULL, 3, &ModelInputTaskHandle);
+	xTaskCreate(ModelUpdateTask, "ModelUpdateTask", 128, NULL, 4, &ModelUpdateTaskHandle);
 
 	xUARTQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
 	xLCDQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
