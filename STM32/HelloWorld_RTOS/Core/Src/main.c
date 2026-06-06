@@ -1,8 +1,10 @@
 /* **************** START *********************** */
 /* Libraries, Definitions and Global Declarations */
 #include <stdint.h>
+#include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
+
 #include "main.h"
 #include "FreeRTOS.h"
 #include "portmacro.h"
@@ -26,12 +28,12 @@
 #define MAX_BRAKE_TORQUE 100.0
 #define MIN_ADC_VALUE 10.0
 #define MAX_ADC_VALUE 4100.0
+
+#define MODEL_UPDATE_TASK_PERIOD 40
+#define MODEL_INPUT_TASK_PERIOD 60
 #define LCD_TASK_PERIOD 120
 #define COMMUNICATION_TASK_PERIOD 240
-#define MODEL_UPDATE_TASK_PERIOD 40
 #define MODEL_QUEUE_SIZE 5
-
-volatile bool model_updated_task[2] = {false, false};
 
 // Gamma correction LUT for LEDs
 const uint8_t gamma8[] = {
@@ -52,8 +54,13 @@ const uint8_t gamma8[] = {
 177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
 215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
-TaskHandle_t Task1Handle;
-QueueHandle_t xModelQueue;
+TaskHandle_t CommunicationTaskHandle;
+TaskHandle_t LCDTaskHandle;
+TaskHandle_t ModelInputTaskHandle;
+TaskHandle_t ModelUpdateTaskHandle;
+
+QueueHandle_t xUARTQueue;
+QueueHandle_t xLCDQueue;
 
 typedef struct {
 	// Inputs
@@ -74,15 +81,14 @@ void LCDTask( void *pvParameters );
 void ModelInputTask( void *pvParameters );
 void ModelUpdateTask( void *pvParameters );
 
-void TIM3_IRQHandler( void ) {
-	if ( TIM3->SR & ( 0x1UL << 0U ) ) {
-		//ModelUpdateTask();
-		model_updated_task[0] = 
-		model_updated_task[1] = true;
-		TIM3->SR &= ~( 0x1UL << 0U );
-		TIM3->CNT = TIM3_CNT_40MS;
-	}
-}
+// Currently not necessary, reimplement if model update task priority changes!
+// void TIM3_IRQHandler( void ) {
+// 	if ( TIM3->SR & ( 0x1UL << 0U ) ) {
+// 		//ModelUpdateTask();
+// 		TIM3->SR &= ~( 0x1UL << 0U );
+// 		TIM3->CNT = TIM3_CNT_40MS;
+// 	}
+// }
 
 // Linear interpolation between a and b
 float lerp(float a, float b, float t) {
@@ -123,16 +129,17 @@ void get_average(ModelData *data, uint8_t n) {
 
 // Function that gets and averages all model data available in a queue
 // Only call when data has been confirmed to exist
-void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t *queueHandle) {
+void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t queueHandle) {
+	memset(data, 0, sizeof ( ModelData ));
 	uint8_t takenValues = 0;
 
 	// Take all and get average on all elements
-	while (xQueueReceive(queueHandle, &retVal, 0) == pdTRUE) {
+	while (xQueueReceive(queueHandle, retVal, 0) == pdTRUE) {
 		takenValues++;
-		update_data(&retVal, &data);
+		update_data(retVal, data);
 	}
 	
-	get_average(&data, takenValues);
+	get_average(data, takenValues);
 }
 
 /* Superloop structure */
@@ -154,9 +161,13 @@ int main(void)
 	LCD_Clear( );
 
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
-	xTaskCreate(StartTask1, "Task1", 128, NULL, 2, &Task1Handle);
+	xTaskCreate(CommunicationTask, "CommunicationTask", 512, NULL, 1, &CommunicationTaskHandle);
+	xTaskCreate(LCDTask, "LCDTask", 512, NULL, 2, &LCDTaskHandle);
+	xTaskCreate(ModelInputTask, "ModelInputTask", 512, NULL, 3, &ModelInputTaskHandle);
+	xTaskCreate(ModelUpdateTask, "ModelUpdateTask", 512, NULL, 4, &ModelUpdateTaskHandle);
 
-	xModelQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
+	xUARTQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
+	xLCDQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
 
 	/* Start the scheduler */
 	printf("Heap Available: %u bytes\r\n", xPortGetFreeHeapSize());
@@ -187,8 +198,8 @@ void CommunicationTask( void *pvParameters ) {
 	for(;;) {
 		/* -------------- UART Transmission of data to ESP32 ------------- */
 		// Only fetch data if it's available
-		if (xQueuePeek(xModelQueue, &retVal, 0) == pdTRUE) {
-			get_queue_data(&UARTData, &retVal, &xModelQueue);
+		if (xQueuePeek(xUARTQueue, &retVal, 0) == pdTRUE) {
+			get_queue_data(&UARTData, &retVal, xUARTQueue);
 			
 			char uart_buf[64]; // Buffer for transmission
 
@@ -204,9 +215,9 @@ void CommunicationTask( void *pvParameters ) {
 			/* DEBUG ONLY: transmits buffer to terminal
 				USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
 			*/
-
-			vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 		}
+
+		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 	}
 }
 
@@ -238,7 +249,8 @@ void ModelUpdateTask( void *pvParameters ) {
 			.Gear 			= EngTrModel_Y.Gear,
 		};
 
-		xQueueSend(xModelQueue, &updatedData, 0);
+		xQueueSend(xUARTQueue, &updatedData, 0);
+		xQueueSend(xLCDQueue, &updatedData, 0);
 
 		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
 	}
@@ -250,8 +262,8 @@ void LCDTask( void *pvParameters ) {
 
 	for(;;) {
 		// Only run if there's data to fetch
-		if (xQueuePeek(xModelQueue, &retVal, 0) == pdTRUE) {
-			get_queue_data(&LCDData, &retVal, &xModelQueue);
+		if (xQueuePeek(xLCDQueue, &retVal, 0) == pdTRUE) {
+			get_queue_data(&LCDData, &retVal, xLCDQueue);
 			
 			/* ---------------- Display data in LCD Display ------------------- */
 			/* 	Display Format:
@@ -284,35 +296,40 @@ void LCDTask( void *pvParameters ) {
 			LCD_Put_Str( "RPM: " );
 			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", LCDData.EngineSpeed);
 			LCD_Put_Str( lcd_buf );
-
-			vTaskDelayUntil(xLastWakeTime, LCD_TASK_PERIOD);
 		}
-	
+
+		vTaskDelayUntil(&xLastWakeTime, LCD_TASK_PERIOD);
 	}
 }
 
 void ModelInputTask( void *pvParameters ) {
-	/* --------------- Throttle through potentiometer action ----------------- */
-	if ((ADC1->SR & ( 0x1UL << 1U ))) {
-		// Read the raw 12-bit ADC value
-		uint32_t result = ADC1->DR;
+	TickType_t xLastWakeTime = xTaskGetTickCount();
 
-		// Normalize result and update throttle and brake values
-		float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
-		
-		EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
-	}
+	for(;;) {
+		/* --------------- Throttle through potentiometer action ----------------- */
+		if ((ADC1->SR & ( 0x1UL << 1U ))) {
+			// Read the raw 12-bit ADC value
+			uint32_t result = ADC1->DR;
 
-	/* --------------- Brake torque through push button ----------------- */
-	if (!BUTTON) {
-		USER_TIM2_Delay_10ms();
-		if (!BUTTON) {
-			EngTrModel_U.Throttle = MIN_THROTTLE;
-			EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
+			// Normalize result and update throttle and brake values
+			float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
+			
+			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
 		}
-	}
-	else {
-		EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
+
+		/* --------------- Brake torque through push button ----------------- */
+		if (!BUTTON) {
+			USER_TIM2_Delay_10ms();
+			if (!BUTTON) {
+				EngTrModel_U.Throttle = MIN_THROTTLE;
+				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
+			}
+		}
+		else {
+			EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
+		}
+
+		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
 	}
 }
 
