@@ -26,7 +26,8 @@
 #define MAX_BRAKE_TORQUE 100.0
 #define MIN_ADC_VALUE 10.0
 #define MAX_ADC_VALUE 4100.0
-#define COMMUNICATION_TASK_PERIOD 120
+#define LCD_TASK_PERIOD 120
+#define COMMUNICATION_TASK_PERIOD 240
 #define MODEL_UPDATE_TASK_PERIOD 40
 #define MODEL_QUEUE_SIZE 5
 
@@ -120,6 +121,20 @@ void get_average(ModelData *data, uint8_t n) {
 	data->Throttle /= n;
 }
 
+// Function that gets and averages all model data available in a queue
+// Only call when data has been confirmed to exist
+void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t *queueHandle) {
+	uint8_t takenValues = 0;
+
+	// Take all and get average on all elements
+	while (xQueueReceive(queueHandle, &retVal, 0) == pdTRUE) {
+		takenValues++;
+		update_data(&retVal, &data);
+	}
+	
+	get_average(&data, takenValues);
+}
+
 /* Superloop structure */
 int main(void)
 {
@@ -166,27 +181,15 @@ void StartTask1(void *pvParameters) {
 
 void CommunicationTask( void *pvParameters ) {
 	// Only run if model has been updated
-	ModelData retVal;
+	ModelData retVal, UARTData;
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 
 	for(;;) {
 		/* -------------- UART Transmission of data to ESP32 ------------- */
-		ModelData UARTData;
-		
-		// Only perform transmission if there's data available
-		if (xQueueReceive(xModelQueue, &retVal, 0) == pdTRUE) {
-			// Take current data
-			uint8_t takenValues = 1;
-			UARTData = retVal;
-
-			// Take all and get average on whatever remains
-			while (xQueueReceive(xModelQueue, &retVal, 0) == pdTRUE) {
-				takenValues++;
-				update_data(&retVal, &UARTData);
-			}
+		// Only fetch data if it's available
+		if (xQueuePeek(xModelQueue, &retVal, 0) == pdTRUE) {
+			get_queue_data(&UARTData, &retVal, &xModelQueue);
 			
-			get_average(&UARTData, takenValues);
-
 			char uart_buf[64]; // Buffer for transmission
 
 			// Format and pack data into buffer
@@ -201,9 +204,9 @@ void CommunicationTask( void *pvParameters ) {
 			/* DEBUG ONLY: transmits buffer to terminal
 				USER_USART2_Transmit((uint8_t *)uart_buf, msg_len);
 			*/
-		}
 
-		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
+			vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
+		}
 	}
 }
 
@@ -242,42 +245,50 @@ void ModelUpdateTask( void *pvParameters ) {
 }
 
 void LCDTask( void *pvParameters ) {
-	// Only run if model has been updated
-	if (!model_updated_task[1]) return;
-	model_updated_task[1] = false;
+	TickType_t xLastWakeTime = xTaskGetTickCount();
+	ModelData retVal, LCDData;
+
+	for(;;) {
+		// Only run if there's data to fetch
+		if (xQueuePeek(xModelQueue, &retVal, 0) == pdTRUE) {
+			get_queue_data(&LCDData, &retVal, &xModelQueue);
+			
+			/* ---------------- Display data in LCD Display ------------------- */
+			/* 	Display Format:
+				
+				Thr: xx.xx  G: x
+				RPM: xxxx.x
+			*/
+
+			char lcd_buf[16]; // Buffer to hold data, using snprintf
+
+			// --- DISPLAY LINE 1 ---
+			LCD_Set_Cursor( 1, 1 );
+
+			// We use extra spaces at the end for formatting
+
+			// Throttle
+			LCD_Put_Str( "Thr: " ); 
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.2f  ", LCDData.Throttle);
+			LCD_Put_Str( lcd_buf ); 
+
+			// Gear
+			LCD_Put_Str( "G: " );
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.0f ", LCDData.Gear);
+			LCD_Put_Str( lcd_buf );
+			
+			// --- DISPLAY LINE 2 ---
+			LCD_Set_Cursor( 2, 1 );
+			
+			// RPM
+			LCD_Put_Str( "RPM: " );
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", LCDData.EngineSpeed);
+			LCD_Put_Str( lcd_buf );
+
+			vTaskDelayUntil(xLastWakeTime, LCD_TASK_PERIOD);
+		}
 	
-	/* ---------------- Display data in LCD Display ------------------- */
-
-	/* 	Display Format:
-		
-		Thr: xx.xx  G: x
-		RPM: xxxx.x
-	*/
-
-	char lcd_buf[16]; // Buffer to hold data, using snprintf
-
-	// --- DISPLAY LINE 1 ---
-	LCD_Set_Cursor( 1, 1 );
-
-	// We use extra spaces at the end for formatting
-
-	// Throttle
-	LCD_Put_Str( "Thr: " ); 
-	snprintf(lcd_buf, sizeof(lcd_buf), "%.2f  ", EngTrModel_U.Throttle);
-	LCD_Put_Str( lcd_buf ); 
-
-	// Gear
-	LCD_Put_Str( "G: " );
-	snprintf(lcd_buf, sizeof(lcd_buf), "%.0f ", EngTrModel_Y.Gear);
-	LCD_Put_Str( lcd_buf );
-	
-	// --- DISPLAY LINE 2 ---
-	LCD_Set_Cursor( 2, 1 );
-	
-	// RPM
-	LCD_Put_Str( "RPM: " );
-	snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", EngTrModel_Y.EngineSpeed);
-	LCD_Put_Str( lcd_buf );
+	}
 }
 
 void ModelInputTask( void *pvParameters ) {
