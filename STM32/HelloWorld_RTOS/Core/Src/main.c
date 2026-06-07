@@ -31,9 +31,9 @@
 
 #define MODEL_UPDATE_TASK_PERIOD 40
 #define MODEL_INPUT_TASK_PERIOD 60
-#define LCD_TASK_PERIOD 120
-#define COMMUNICATION_TASK_PERIOD 240
-#define MODEL_QUEUE_SIZE 5
+#define LCD_TASK_PERIOD 80
+#define COMMUNICATION_TASK_PERIOD 120
+#define MODEL_QUEUE_SIZE 4
 
 // Gamma correction LUT for LEDs
 const uint8_t gamma8[] = {
@@ -138,6 +138,8 @@ void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t queueHandl
 		takenValues++;
 		update_data(retVal, data);
 	}
+
+	printf("used %u vals\r\n", takenValues);
 	
 	get_average(data, takenValues);
 }
@@ -219,6 +221,7 @@ void CommunicationTask( void *pvParameters ) {
 			*/
 		}
 
+		printf("[%lu] Com Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 	}
 }
@@ -254,6 +257,7 @@ void ModelUpdateTask( void *pvParameters ) {
 		xQueueSend(xUARTQueue, &updatedData, 0);
 		xQueueSend(xLCDQueue, &updatedData, 0);
 
+		printf("[%lu] MU Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
 	}
 }
@@ -300,6 +304,7 @@ void LCDTask( void *pvParameters ) {
 			LCD_Put_Str( lcd_buf );
 		}
 
+		printf("[%lu] LCD Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, LCD_TASK_PERIOD);
 	}
 }
@@ -336,6 +341,7 @@ void ModelInputTask( void *pvParameters ) {
 			button_pressed_previous_cycle = 0;
 		}
 
+		printf("[%lu] MI Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
 	}
 }
