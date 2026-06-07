@@ -26,7 +26,7 @@
 #define MAX_THROTTLE 50.0
 #define MIN_BRAKE_TORQUE 0.0
 #define MAX_BRAKE_TORQUE 100.0
-#define MIN_ADC_VALUE 10.0
+#define MIN_ADC_VALUE 8.0
 #define MAX_ADC_VALUE 4100.0
 
 #define MODEL_UPDATE_TASK_PERIOD 40
@@ -84,7 +84,7 @@ void ModelUpdateTask( void *pvParameters );
 // Currently not necessary, reimplement if model update task priority changes!
 // void TIM3_IRQHandler( void ) {
 // 	if ( TIM3->SR & ( 0x1UL << 0U ) ) {
-// 		//ModelUpdateTask();
+// 		ModelUpdateTask();
 // 		TIM3->SR &= ~( 0x1UL << 0U );
 // 		TIM3->CNT = TIM3_CNT_40MS;
 // 	}
@@ -139,7 +139,9 @@ void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t queueHandl
 		update_data(retVal, data);
 	}
 
-	printf("used %u vals\r\n", takenValues);
+	/* DEBUG ONLY: print number of values from queue
+		printf("used %u vals\r\n", takenValues);
+	*/
 	
 	get_average(data, takenValues);
 }
@@ -150,19 +152,19 @@ int main(void)
 	/* Declarations and Initializations */
 	HAL_Init( );
 	USER_SystemClock_Config( );
-	USER_GPIO_Init();
+	USER_GPIO_Init( );
 	USER_TIM2_Init( );
 	USER_TIM4_Init( );
-    USER_ADC_Init();
-	USER_USART1_Init();
-    USER_UART2_Init();
-	LCD_Init(); // MUST GO AFTER TIM2 INIT
-	EngTrModel_initialize();
+    USER_ADC_Init( );
+	USER_USART1_Init( );
+    USER_UART2_Init( );
+	LCD_Init( ); // MUST GO AFTER TIM2 INIT
+	EngTrModel_initialize( );
+	LCD_Clear( );
 
 	// Uncomment these if interrupt is added back:
 	// USER_TIM3_Init( );
 	// USER_TIM3_Delay_40ms();
-	LCD_Clear( );
 
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
 	xTaskCreate(CommunicationTask, "CommunicationTask", 512, NULL, 1, &CommunicationTaskHandle);
@@ -221,6 +223,7 @@ void CommunicationTask( void *pvParameters ) {
 			*/
 		}
 
+		/* DEBUG ONLY: Prints last wake time to terminal */
 		printf("[%lu] Com Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 	}
@@ -234,15 +237,14 @@ void ModelUpdateTask( void *pvParameters ) {
 		EngTrModel_step();
 
 		// Output PWM
-		// TODO: Adapt to motor output
 		/* ---------------- Display velocity in LEDs ------------------- */
 		uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
-		uint32_t brightness = vel_to_brightness(vel);
+		uint32_t PWM = CCR_STEP * vel;
 
-		TIM4->CCR1 = brightness;
-		TIM4->CCR2 = brightness;
-		TIM4->CCR3 = brightness;
-		TIM4->CCR4 = brightness;
+		TIM4->CCR1 = PWM;
+		TIM4->CCR2 = PWM;
+		TIM4->CCR3 = PWM;
+		TIM4->CCR4 = PWM;
 
 		// Write model data to queue
 		ModelData updatedData = {
@@ -257,6 +259,7 @@ void ModelUpdateTask( void *pvParameters ) {
 		xQueueSend(xUARTQueue, &updatedData, 0);
 		xQueueSend(xLCDQueue, &updatedData, 0);
 
+		/* DEBUG ONLY: Prints last wake time to terminal */
 		printf("[%lu] MU Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
 	}
@@ -304,6 +307,7 @@ void LCDTask( void *pvParameters ) {
 			LCD_Put_Str( lcd_buf );
 		}
 
+		/* DEBUG ONLY: Prints last wake time to terminal */
 		printf("[%lu] LCD Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, LCD_TASK_PERIOD);
 	}
@@ -341,6 +345,7 @@ void ModelInputTask( void *pvParameters ) {
 			button_pressed_previous_cycle = 0;
 		}
 
+		/* DEBUG ONLY: Prints last wake time to terminal */
 		printf("[%lu] MI Task\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
 	}
