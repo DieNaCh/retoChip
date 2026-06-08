@@ -2,13 +2,14 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "INFINITUM9EE6_2.4";
-const char* password = "JPnm7mX92t";
-const char* mqtt_server = "192.168.1.99"; 
+const char* ssid = "iPhone de Diego (4)";
+const char* password = "NIKO2016";
+const char* mqtt_server = "192.168.137.73"; 
 const int mqtt_port = 1883; 
 const char* mqtt_user = "";   
 const char* mqtt_password = ""; 
 const char* motor_data_topic = "motor/data";
+const char* motor_control_topic = "motor/control";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -51,12 +52,49 @@ void reconnect() {
   } 
 } 
 
+void callback(char* topic, byte* payload, unsigned int length) {
+  String message;
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+
+  Serial.print("\n[MQTT] Recibido en tópico: ");
+  Serial.println(topic);
+  Serial.println(message);
+
+  // Controlar el tractor, enviando a STM
+  if (String(topic) == motor_control_topic) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, message);
+
+    if (error) {
+      Serial.print("Error al registrar JSON de control: ");
+      Serial.println(error.c_str());
+      return;
+    }
+
+    // Extraer datos del JSON
+    int accel = doc["acelerador"] | 0;
+    bool freno = doc["freno"] | false;
+    bool cont_rem = doc["control_remoto"] | false;
+
+    // Formatear y enviar
+    String comando = "A," + String(accel) +",B," + String(freno) + ",R," + String(cont_rem) + "\n";
+
+    Serial1.print(comando);
+
+    Serial.print("[Serial] Enviado a STM32: ");
+    Serial.println(comando);
+  }
+}
+
 void setup() {
   Serial.begin(115200); 
   delay(3000); 
   randomSeed(analogRead(0));
   setup_wifi(); 
   client.setServer(mqtt_server, mqtt_port); 
+  client.setCallback(callback);
   Serial1.begin(115200, SERIAL_8N1, 4, 5); 
 }
 
