@@ -22,6 +22,10 @@ float vel_sped = 5.0;
 float vel_veh = 5.0;
 String marchaS = "";
 
+int accel;
+bool freno;
+bool cont_rem;
+
 void setup_wifi() { 
   delay(10); 
   Serial.println(); 
@@ -42,6 +46,7 @@ void reconnect() {
   while (!client.connected()) { 
     Serial.print("Intentando conectar a MQTT..."); 
     if (client.connect("ESP32_Tractor_Client", mqtt_user, mqtt_password)) { 
+      client.subscribe(motor_control_topic);
       Serial.println("conectado"); 
     } else { 
       Serial.print("falló, rc="); 
@@ -74,17 +79,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
 
     // Extraer datos del JSON
-    int accel = doc["acelerador"] | 0;
-    bool freno = doc["freno"] | false;
-    bool cont_rem = doc["control_remoto"] | false;
+    accel = doc["acelerador"] | 0;
+    freno = doc["freno"] | false;
+    cont_rem = doc["control_remoto"] | false;
 
-    // Formatear y enviar
-    String comando = "A," + String(accel) +",B," + String(freno) + ",R," + String(cont_rem) + "\n";
-
-    Serial1.print(comando);
-
-    Serial.print("[Serial] Enviado a STM32: ");
-    Serial.println(comando);
+    Serial.print("[MQTT] Comandos actualizados en memoria");
   }
 }
 
@@ -109,20 +108,26 @@ void loop() {
     String incomingData = Serial1.readStringUntil('\n');
     incomingData.trim(); 
 
-    // Variables temporales para guardar lo extraído
-    float temp_thr = 0.0;
-    float temp_vel = 0.0;
-    float temp_rpm = 0.0;
-    int temp_gear = 0;
+    if (incomingData == "?") {
+      String comando = "A," + String(accel) +",B," + String(freno) + ",C," + String(cont_rem) + "\n";
+      
+      Serial.print("[Serial] Enviado a STM32: ");
+      Serial1.print(comando);
+    }
+    else {
+      // Variables temporales para guardar lo extraído
+      float temp_thr = 0.0;
+      float temp_vel = 0.0;
+      float temp_rpm = 0.0;
+      int temp_gear = 0;
+      int leidos = sscanf(incomingData.c_str(), "T: %f | S: %f | R: %f | G: %d", &temp_thr, &temp_vel, &temp_rpm, &temp_gear);
 
-
-    int leidos = sscanf(incomingData.c_str(), "T: %f | S: %f | R: %f | G: %d", &temp_thr, &temp_vel, &temp_rpm, &temp_gear);
-
-    if (leidos == 4) {
-      vel_motor = temp_thr;             // Thr -> motor
-      vel_sped = temp_vel;              //Velocity -> sped
-      vel_veh   = temp_rpm;             // RPM -> vl
-      marchaS   = String(temp_gear);    // Gear -> marcha (Convertido a String para el JSON)
+      if (leidos == 4) {
+        vel_motor = temp_thr;             // Thr -> motor
+        vel_sped = temp_vel;              //Velocity -> sped
+        vel_veh   = temp_rpm;             // RPM -> vl
+        marchaS   = String(temp_gear);    // Gear -> marcha (Convertido a String para el JSON)
+      }
     }
   }
 

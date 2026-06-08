@@ -28,6 +28,7 @@
 #define MAX_BRAKE_TORQUE 100.0
 #define MIN_ADC_VALUE 8.0
 #define MAX_ADC_VALUE 4100.0
+#define MAX_WAIT_CYCLES 100000
 
 #define MODEL_UPDATE_TASK_PERIOD 40
 #define MODEL_INPUT_TASK_PERIOD 60
@@ -146,6 +147,65 @@ void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t queueHandl
 	get_average(data, takenValues);
 }
 
+// Function that fetches remote control values, received through UART
+void read_remote_control(uint8_t *accel, uint8_t *brake, uint8_t *remote_control) {
+	// Prompt ESP32 to send data
+	char req[] = "?\n"; 
+	USER_USART1_Transmit((uint8_t *)req, 2);
+
+	// static to have the values persist over function calls
+	static char rx_buf[64];
+	static uint8_t rx_idx = 0;
+
+	uint32_t timeout = 0;
+
+	while (timeout < MAX_WAIT_CYCLES) {
+		if (USART1->SR & USART_SR_RXNE) {
+			char rec = USART1->DR;
+
+			// Endline character implies the message is done
+			if (rec == '\n') {
+				// Process message end and reset idx
+				rx_buf[rx_idx] = '\0';
+
+				int t_accel, t_brake, t_remote_control;
+
+				uint8_t read_items = sscanf(rx_buf, "A,%d,B,%d,C,%d", &t_accel, &t_brake, &t_remote_control);
+
+				if (read_items == 3) {
+					*accel = (uint8_t)t_accel;
+					*brake = (uint8_t)t_brake;
+					*remote_control = (uint8_t)t_remote_control;
+
+					printf("[RC_VALID] A:%d B:%d R:%d\r\n", t_accel, t_brake, t_remote_control);
+				}
+				else {
+					printf("[RC_FAIL] Got: '%s'\r\n", rx_buf);
+				}
+
+				rx_idx = 0;
+				return;
+			}
+			else {
+				// We are not done yet
+				if (rx_idx < sizeof(rx_buf) - 1) {
+					rx_buf[rx_idx++] = rec;
+				}
+				else {
+					// Data is trash, get rid of it
+					rx_idx = 0;
+					return;
+				}
+			}
+
+			timeout = 0;
+		}
+		else {
+			timeout++;
+		}
+	}
+}
+
 /* Superloop structure */
 int main(void)
 {
@@ -169,7 +229,7 @@ int main(void)
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
 	xTaskCreate(CommunicationTask, "CommunicationTask", 512, NULL, 1, &CommunicationTaskHandle);
 	xTaskCreate(LCDTask, "LCDTask", 512, NULL, 2, &LCDTaskHandle);
-	xTaskCreate(ModelInputTask, "ModelInputTask", 128, NULL, 3, &ModelInputTaskHandle);
+	xTaskCreate(ModelInputTask, "ModelInputTask", 256, NULL, 3, &ModelInputTaskHandle);
 	xTaskCreate(ModelUpdateTask, "ModelUpdateTask", 128, NULL, 4, &ModelUpdateTaskHandle);
 
 	xUARTQueue = xQueueCreate(MODEL_QUEUE_SIZE, sizeof ( ModelData ));
@@ -224,7 +284,7 @@ void CommunicationTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] Comm\r\n", xLastWakeTime);
+		// printf("[%lu] Comm\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 	}
 }
@@ -260,7 +320,7 @@ void ModelUpdateTask( void *pvParameters ) {
 		xQueueSend(xLCDQueue, &updatedData, 0);
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] MU\r\n", xLastWakeTime);
+		// printf("[%lu] MU\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
 	}
 }
@@ -313,7 +373,7 @@ void LCDTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] LCD\r\n", xLastWakeTime);
+		// printf("[%lu] LCD\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, LCD_TASK_PERIOD);
 	}
 }
@@ -321,37 +381,57 @@ void LCDTask( void *pvParameters ) {
 void ModelInputTask( void *pvParameters ) {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	bool button_pressed_previous_cycle = 0;
+	uint8_t rx_accel = 0, rx_brake = 0, rx_remote = 0;
 
 	for(;;) {
-		/* --------------- Throttle through potentiometer action ----------------- */
-		if ((ADC1->SR & ( 0x1UL << 1U ))) {
-			// Read the raw 12-bit ADC value
-			uint32_t result = ADC1->DR;
+		/* --------------- Remote control through Grafana ------------------------ */
+		read_remote_control(&rx_accel, &rx_brake, &rx_remote);
+		
+		// Only override if remote control is active
+		if (rx_remote) {
 
-			// Normalize result and update throttle and brake values
-			float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
-			
-			EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
-		}
-
-		/* --------------- Brake torque through push button ----------------- */
-		if (!BUTTON) {
-			// We need to debounce. We'd usually do this through a hardware delay with TIM2.
-			// However, we can use the task's period itself as a debounce.
-			if (button_pressed_previous_cycle) {
+			// Set brake/acceleration values based on received info
+			if (rx_brake ){
 				EngTrModel_U.Throttle = MIN_THROTTLE;
 				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
 			}
-			
-			button_pressed_previous_cycle = 1;
+			else {
+				EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, (float)rx_accel / 100);
+			}
 		}
 		else {
-			EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
-			button_pressed_previous_cycle = 0;
+			// If no remote control override, use physical inputs
+
+			/* --------------- Throttle through potentiometer action ----------------- */
+			if ((ADC1->SR & ( 0x1UL << 1U ))) {
+				// Read the raw 12-bit ADC value
+				uint32_t result = ADC1->DR;
+
+				// Normalize result and update throttle and brake values
+				float relative_result = ( (float)result - MIN_ADC_VALUE ) / ( MAX_ADC_VALUE - MIN_ADC_VALUE );
+				
+				EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, relative_result);
+			}
+
+			/* --------------- Brake torque through push button ----------------- */
+			if (!BUTTON) {
+				// We need to debounce. We'd usually do this through a hardware delay with TIM2.
+				// However, we can use the task's period itself as a debounce.
+				if (button_pressed_previous_cycle) {
+					EngTrModel_U.Throttle = MIN_THROTTLE;
+					EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
+				}
+				
+				button_pressed_previous_cycle = 1;
+			}
+			else {
+				EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
+				button_pressed_previous_cycle = 0;
+			}
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] MI\r\n", xLastWakeTime);
+		// printf("[%lu] MI\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
 	}
 }
