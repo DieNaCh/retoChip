@@ -224,7 +224,7 @@ void CommunicationTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] Com Task\r\n", xLastWakeTime);
+		printf("[%lu] Comm\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 	}
 }
@@ -260,7 +260,7 @@ void ModelUpdateTask( void *pvParameters ) {
 		xQueueSend(xLCDQueue, &updatedData, 0);
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] MU Task\r\n", xLastWakeTime);
+		printf("[%lu] MU\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
 	}
 }
@@ -277,8 +277,8 @@ void LCDTask( void *pvParameters ) {
 			/* ---------------- Display data in LCD Display ------------------- */
 			/* 	Display Format:
 				
-				Thr: xx.xx  G: x
-				RPM: xxxx.x
+				T: xx.x  G: x
+				R: xxxx S: xxx
 			*/
 
 			char lcd_buf[16]; // Buffer to hold data, using snprintf
@@ -289,8 +289,8 @@ void LCDTask( void *pvParameters ) {
 			// We use extra spaces at the end for formatting
 
 			// Throttle
-			LCD_Put_Str( "Thr: " ); 
-			snprintf(lcd_buf, sizeof(lcd_buf), "%.2f  ", LCDData.Throttle);
+			LCD_Put_Str( "T: " ); 
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", LCDData.Throttle);
 			LCD_Put_Str( lcd_buf ); 
 
 			// Gear
@@ -302,13 +302,18 @@ void LCDTask( void *pvParameters ) {
 			LCD_Set_Cursor( 2, 1 );
 			
 			// RPM
-			LCD_Put_Str( "RPM: " );
-			snprintf(lcd_buf, sizeof(lcd_buf), "%.1f  ", LCDData.EngineSpeed);
+			LCD_Put_Str( "R: " );
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.0f  ", LCDData.EngineSpeed);
+			LCD_Put_Str( lcd_buf );
+
+			// Speed
+			LCD_Put_Str( "S: " );
+			snprintf(lcd_buf, sizeof(lcd_buf), "%.0f  ", LCDData.VehicleSpeed);
 			LCD_Put_Str( lcd_buf );
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] LCD Task\r\n", xLastWakeTime);
+		printf("[%lu] LCD\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, LCD_TASK_PERIOD);
 	}
 }
@@ -346,7 +351,7 @@ void ModelInputTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		printf("[%lu] MI Task\r\n", xLastWakeTime);
+		printf("[%lu] MI\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
 	}
 }
