@@ -396,6 +396,7 @@ void ModelInputTask( void *pvParameters ) {
 				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
 			}
 			else {
+				EngTrModel_U.BrakeTorque = MIN_BRAKE_TORQUE;
 				EngTrModel_U.Throttle = lerp(MIN_THROTTLE, MAX_THROTTLE, (float)rx_accel / 100);
 			}
 		}
