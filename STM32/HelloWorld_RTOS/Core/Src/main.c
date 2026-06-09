@@ -28,7 +28,6 @@
 #define MAX_BRAKE_TORQUE 100.0
 #define MIN_ADC_VALUE 8.0
 #define MAX_ADC_VALUE 4100.0
-#define MAX_WAIT_CYCLES 100000
 
 #define MODEL_UPDATE_TASK_PERIOD 40
 #define MODEL_INPUT_TASK_PERIOD 60
@@ -54,6 +53,10 @@ const uint8_t gamma8[] = {
 144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
 177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
 215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
+
+volatile char rx_buf[64];
+volatile uint8_t rx_idx = 0;
+volatile uint8_t rx_ready = 0;
 
 TaskHandle_t CommunicationTaskHandle;
 TaskHandle_t LCDTaskHandle;
@@ -90,6 +93,26 @@ void ModelUpdateTask( void *pvParameters );
 // 		TIM3->CNT = TIM3_CNT_40MS;
 // 	}
 // }
+
+void USART1_IRQHandler( void ) {
+	if (USART1->SR & ( 0x1UL << 5U )) {
+		char rec = USART1->DR;
+
+		if (rec == '\n') {
+			rx_buf[rx_idx] = '\0';
+			rx_ready = 1;
+			rx_idx = 0;
+		}
+		else {
+			if (rx_idx < sizeof(rx_buf) - 1) {
+				rx_buf[rx_idx++] = rec;
+			}
+			else {
+				rx_idx = 0;
+			}
+		}
+	}
+}
 
 // Linear interpolation between a and b
 float lerp(float a, float b, float t) {
@@ -145,65 +168,6 @@ void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t queueHandl
 	*/
 	
 	get_average(data, takenValues);
-}
-
-// Function that fetches remote control values, received through UART
-void read_remote_control(uint8_t *accel, uint8_t *brake, uint8_t *remote_control) {
-	// Prompt ESP32 to send data
-	char req[] = "?\n"; 
-	USER_USART1_Transmit((uint8_t *)req, 2);
-
-	// static to have the values persist over function calls
-	static char rx_buf[64];
-	static uint8_t rx_idx = 0;
-
-	uint32_t timeout = 0;
-
-	while (timeout < MAX_WAIT_CYCLES) {
-		if (USART1->SR & USART_SR_RXNE) {
-			char rec = USART1->DR;
-
-			// Endline character implies the message is done
-			if (rec == '\n') {
-				// Process message end and reset idx
-				rx_buf[rx_idx] = '\0';
-
-				int t_accel, t_brake, t_remote_control;
-
-				uint8_t read_items = sscanf(rx_buf, "A,%d,B,%d,C,%d", &t_accel, &t_brake, &t_remote_control);
-
-				if (read_items == 3) {
-					*accel = (uint8_t)t_accel;
-					*brake = (uint8_t)t_brake;
-					*remote_control = (uint8_t)t_remote_control;
-
-					printf("[RC_VALID] A:%d B:%d R:%d\r\n", t_accel, t_brake, t_remote_control);
-				}
-				else {
-					printf("[RC_FAIL] Got: '%s'\r\n", rx_buf);
-				}
-
-				rx_idx = 0;
-				return;
-			}
-			else {
-				// We are not done yet
-				if (rx_idx < sizeof(rx_buf) - 1) {
-					rx_buf[rx_idx++] = rec;
-				}
-				else {
-					// Data is trash, get rid of it
-					rx_idx = 0;
-					return;
-				}
-			}
-
-			timeout = 0;
-		}
-		else {
-			timeout++;
-		}
-	}
 }
 
 /* Superloop structure */
@@ -284,7 +248,7 @@ void CommunicationTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		// printf("[%lu] Comm\r\n", xLastWakeTime);
+		printf("[%lu] Comm\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, COMMUNICATION_TASK_PERIOD);
 	}
 }
@@ -320,7 +284,7 @@ void ModelUpdateTask( void *pvParameters ) {
 		xQueueSend(xLCDQueue, &updatedData, 0);
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		// printf("[%lu] MU\r\n", xLastWakeTime);
+		printf("[%lu] MU\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_UPDATE_TASK_PERIOD);
 	}
 }
@@ -373,7 +337,7 @@ void LCDTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		// printf("[%lu] LCD\r\n", xLastWakeTime);
+		printf("[%lu] LCD\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, LCD_TASK_PERIOD);
 	}
 }
@@ -385,7 +349,22 @@ void ModelInputTask( void *pvParameters ) {
 
 	for(;;) {
 		/* --------------- Remote control through Grafana ------------------------ */
-		read_remote_control(&rx_accel, &rx_brake, &rx_remote);
+		// Process received data
+		if (rx_ready) {
+			int t_accel, t_brake, t_remote;
+
+			if (sscanf((char*)rx_buf, "A,%d,B,%d,C,%d", &t_accel, &t_brake, &t_remote) == 3) {
+				rx_accel = (uint8_t)t_accel;
+				rx_brake = (uint8_t)t_brake;
+				rx_remote = (uint8_t)t_remote;
+			}
+
+			rx_ready = 0;
+		}
+
+		// Prompt ESP32 to send data for next cycle
+		char req[] = "?\n"; 
+		USER_USART1_Transmit((uint8_t *)req, 2);
 		
 		// Only override if remote control is active
 		if (rx_remote) {
@@ -432,7 +411,7 @@ void ModelInputTask( void *pvParameters ) {
 		}
 
 		/* DEBUG ONLY: Prints last wake time to terminal */
-		// printf("[%lu] MI\r\n", xLastWakeTime);
+		printf("[%lu] MI\r\n", xLastWakeTime);
 		vTaskDelayUntil(&xLastWakeTime, MODEL_INPUT_TASK_PERIOD);
 	}
 }
