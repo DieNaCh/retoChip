@@ -20,6 +20,17 @@ void USER_USART1_Init( void ){
 	GPIOA->CRH		&=	~( 0x3UL <<  10U ) &	~( 0x3UL <<  8U );
 	GPIOA->CRH		|=	 ( 0x1UL <<  10U );
 	USART1->CR1		|= 	 USART_CR1_RE;//		Reception enabled
+
+	// Interrupt config
+	// Receiver enable
+	USART1->CR1 |= ( 0x1UL << 2U );
+
+	// Enable RX interrupt
+	USART1->CR1 |= ( 0x1UL << 5U );
+
+	// Enable interrupt in NVIX
+	NVIC->ISER[1] |= ( 0x1UL << 5U );
+
 }
 
 void USER_USART1_Transmit( uint8_t *pData, uint16_t size ){
