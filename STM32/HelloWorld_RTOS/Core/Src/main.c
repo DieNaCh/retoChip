@@ -33,26 +33,6 @@
 #define MODEL_INPUT_TASK_PERIOD 60
 #define LCD_TASK_PERIOD 80
 #define COMMUNICATION_TASK_PERIOD 120
-#define MODEL_QUEUE_SIZE 4
-
-// Gamma correction LUT for LEDs
-const uint8_t gamma8[] = {
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2,
-2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5,
-5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10,
-10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
-17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
-25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
-37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
-51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
-69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
-90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
-115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
-144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
-177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
-215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
 volatile char rx_buf[64];
 volatile uint8_t rx_idx = 0;
@@ -85,15 +65,6 @@ void LCDTask( void *pvParameters );
 void ModelInputTask( void *pvParameters );
 void ModelUpdateTask( void *pvParameters );
 
-// Currently not necessary, reimplement if model update task priority changes!
-// void TIM3_IRQHandler( void ) {
-// 	if ( TIM3->SR & ( 0x1UL << 0U ) ) {
-// 		ModelUpdateTask();
-// 		TIM3->SR &= ~( 0x1UL << 0U );
-// 		TIM3->CNT = TIM3_CNT_40MS;
-// 	}
-// }
-
 void USART1_IRQHandler( void ) {
 	if (USART1->SR & ( 0x1UL << 5U )) {
 		char rec = USART1->DR;
@@ -117,20 +88,6 @@ void USART1_IRQHandler( void ) {
 // Linear interpolation between a and b
 float lerp(float a, float b, float t) {
     return a + t * (b - a);
-}
-
-// Function that converts vehicle velocity to LED brightness based on Gamma Correction
-uint32_t vel_to_brightness(uint32_t vel) {
-	uint32_t ccr_val = CCR_STEP * vel;
-
-	// The CCR goes up to approximately 2^16, while the LUT holds up to 2^8
-	// We shift right by 8 bits to read a somewhat accurate value in the LUT.
-	// This value then needs to be scaled by 2^8, and fit within the ARR value.
-	uint32_t corrected_brightness = gamma8[ccr_val >> 8U] << 8U;
-
-	corrected_brightness = (corrected_brightness > TIM4_ARR_PWM ? TIM4_ARR_PWM : corrected_brightness);
-
-	return corrected_brightness;
 }
 
 // Function that updates model data based on received values
@@ -185,10 +142,6 @@ int main(void)
 	LCD_Init( ); // MUST GO AFTER TIM2 INIT
 	EngTrModel_initialize( );
 	LCD_Clear( );
-
-	// Uncomment these if interrupt is added back:
-	// USER_TIM3_Init( );
-	// USER_TIM3_Delay_40ms();
 
 	/* Create a task with a priority of 0 (idle), 1 (belowNormal), 2 (Normal), 3 (High), 4 (VeryHigh) */
 	xTaskCreate(CommunicationTask, "CommunicationTask", 512, NULL, 1, &CommunicationTaskHandle);
