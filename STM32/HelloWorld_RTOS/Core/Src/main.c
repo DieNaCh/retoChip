@@ -33,6 +33,7 @@
 #define MODEL_INPUT_TASK_PERIOD 60
 #define LCD_TASK_PERIOD 80
 #define COMMUNICATION_TASK_PERIOD 120
+#define MODEL_QUEUE_SIZE 5
 
 volatile char rx_buf[64];
 volatile uint8_t rx_idx = 0;
