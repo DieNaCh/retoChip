@@ -215,7 +215,7 @@ void ModelUpdateTask( void *pvParameters ) {
 		EngTrModel_step();
 
 		// Output PWM
-		/* ---------------- Display velocity in LEDs ------------------- */
+		/* ---------------- Display velocity in motors ------------------- */
 		uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
 		uint32_t PWM = CCR_STEP * vel;
 
