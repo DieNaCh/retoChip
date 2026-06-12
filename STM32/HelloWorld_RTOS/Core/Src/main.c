@@ -50,7 +50,6 @@ QueueHandle_t xLCDQueue;
 typedef struct {
 	// Inputs
 	real_T Throttle;
-	real_T BrakeToggle;
 
 	// Outputs
 	real_T EngineSpeed;
@@ -70,12 +69,14 @@ void USART1_IRQHandler( void ) {
 	if (USART1->SR & ( 0x1UL << 5U )) {
 		char rec = USART1->DR;
 
+		// Endline implies end of transmission
 		if (rec == '\n') {
 			rx_buf[rx_idx] = '\0';
 			rx_ready = 1;
 			rx_idx = 0;
 		}
 		else {
+			// Write to buffer if possible, reset if not
 			if (rx_idx < sizeof(rx_buf) - 1) {
 				rx_buf[rx_idx++] = rec;
 			}
@@ -93,7 +94,6 @@ float lerp(float a, float b, float t) {
 
 // Function that updates model data based on received values
 void update_data(ModelData *source, ModelData *target) {
-	target->BrakeToggle += source->BrakeToggle;
 	target->EngineSpeed += source->EngineSpeed;
 	target->VehicleSpeed += source->VehicleSpeed;
 	target->Gear += source->Gear;
@@ -102,7 +102,6 @@ void update_data(ModelData *source, ModelData *target) {
 
 // Function that averages model data
 void get_average(ModelData *data, uint8_t n) {
-	data->BrakeToggle /= n;
 	data->EngineSpeed /= n;
 	data->VehicleSpeed /= n;
 	data->Gear /= n;
@@ -122,7 +121,7 @@ void get_queue_data(ModelData *data, ModelData *retVal, QueueHandle_t queueHandl
 	}
 
 	/* DEBUG ONLY: print number of values from queue
-		printf("used %u vals\r\n", takenValues);
+		printf("used %u values\r\n", takenValues);
 	*/
 	
 	get_average(data, takenValues);
@@ -164,28 +163,16 @@ int main(void)
 	}
 }
 
-// Task1 function
-void StartTask1(void *pvParameters) {
-
-  /* Infinite loop */
-  for(;;) {
-	  printf("Task 1\r\n");
-	  vTaskDelay(1000);
-  }
-}
-
 void CommunicationTask( void *pvParameters ) {
-	// Only run if model has been updated
-	ModelData retVal, UARTData;
 	TickType_t xLastWakeTime = xTaskGetTickCount();
+	ModelData retVal, UARTData;
+	char uart_buf[64]; // Buffer for transmission
 
 	for(;;) {
 		/* -------------- UART Transmission of data to ESP32 ------------- */
 		// Only fetch data if it's available
 		if (xQueuePeek(xUARTQueue, &retVal, 0) == pdTRUE) {
 			get_queue_data(&UARTData, &retVal, xUARTQueue);
-			
-			char uart_buf[64]; // Buffer for transmission
 
 			// Format and pack data into buffer
 			uint16_t msg_len = snprintf(uart_buf, sizeof(uart_buf), "T: %.2f | S: %.1f | R: %.1f | G: %.0f\r\n", 
@@ -211,11 +198,10 @@ void ModelUpdateTask( void *pvParameters ) {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 
 	for(;;) {
-		// Step into the model
+		/* ---------------- Step into model ------------------- */
 		EngTrModel_step();
 
-		// Output PWM
-		/* ---------------- Display velocity in motors ------------------- */
+		/* ---------------- Output velocity in motors ------------------- */
 		uint32_t vel = round(EngTrModel_Y.VehicleSpeed); // Rounded vehicle speed
 		uint32_t PWM = CCR_STEP * vel;
 
@@ -224,10 +210,9 @@ void ModelUpdateTask( void *pvParameters ) {
 		TIM4->CCR3 = PWM;
 		TIM4->CCR4 = PWM;
 
-		// Write model data to queue
+		/* ---------------- Write model data to queues ------------------- */
 		ModelData updatedData = {
 			.Throttle 		= EngTrModel_U.Throttle,
-			.BrakeToggle 	= EngTrModel_U.BrakeTorque,
 			
 			.EngineSpeed 	= EngTrModel_Y.EngineSpeed,
 			.VehicleSpeed 	= EngTrModel_Y.VehicleSpeed,
@@ -246,6 +231,7 @@ void ModelUpdateTask( void *pvParameters ) {
 void LCDTask( void *pvParameters ) {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	ModelData retVal, LCDData;
+	char lcd_buf[16];
 
 	for(;;) {
 		// Only run if there's data to fetch
@@ -258,8 +244,6 @@ void LCDTask( void *pvParameters ) {
 				T: xx.x  G: x
 				R: xxxx S: xxx
 			*/
-
-			char lcd_buf[16]; // Buffer to hold data, using snprintf
 
 			// --- DISPLAY LINE 1 ---
 			LCD_Set_Cursor( 1, 1 );
@@ -300,13 +284,13 @@ void ModelInputTask( void *pvParameters ) {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	bool button_pressed_previous_cycle = 0;
 	uint8_t rx_accel = 0, rx_brake = 0, rx_remote = 0;
+	int t_accel, t_brake, t_remote;
+	char req[] = "?\n"; 
 
 	for(;;) {
 		/* --------------- Remote control through Grafana ------------------------ */
 		// Process received data
 		if (rx_ready) {
-			int t_accel, t_brake, t_remote;
-
 			if (sscanf((char*)rx_buf, "A,%d,B,%d,C,%d", &t_accel, &t_brake, &t_remote) == 3) {
 				rx_accel = (uint8_t)t_accel;
 				rx_brake = (uint8_t)t_brake;
@@ -317,14 +301,13 @@ void ModelInputTask( void *pvParameters ) {
 		}
 
 		// Prompt ESP32 to send data for next cycle
-		char req[] = "?\n"; 
 		USER_USART1_Transmit((uint8_t *)req, 2);
 		
 		// Only override if remote control is active
 		if (rx_remote) {
 
 			// Set brake/acceleration values based on received info
-			if (rx_brake ){
+			if (rx_brake){
 				EngTrModel_U.Throttle = MIN_THROTTLE;
 				EngTrModel_U.BrakeTorque = MAX_BRAKE_TORQUE;
 			}
